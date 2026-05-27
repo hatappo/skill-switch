@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import {
+  checkGhCommand,
   discoverSkillFiles,
+  GH_MISSING_MESSAGE,
+  GH_SKILL_MISSING_MESSAGE,
   parseFrontmatter,
   provenanceFromFrontmatter,
   readCodexSkillEnabled,
@@ -79,6 +82,14 @@ test("discoverSkillFiles ignores hidden directories", () => {
   writeSkill(hidden, "builtin");
 
   assert.deepEqual(discoverSkillFiles(root), [visible]);
+});
+
+test("checkGhCommand reports a missing command clearly", () => {
+  assert.equal(checkGhCommand("skill-switch-gh-command-that-does-not-exist"), GH_MISSING_MESSAGE);
+});
+
+test("checkGhCommand reports a command without gh skill support", () => {
+  assert.equal(checkGhCommand("node"), GH_SKILL_MISSING_MESSAGE);
 });
 
 test("setCodexSkillEnabled adds and updates one block", () => {

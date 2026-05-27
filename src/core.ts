@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   type Dirent,
   existsSync,
@@ -34,6 +35,10 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   opencode: 8,
   "gemini-cli": 10,
 };
+export const GH_MISSING_MESSAGE =
+  "gh command not found. Install GitHub CLI and the gh skill extension first.";
+export const GH_SKILL_MISSING_MESSAGE =
+  "gh skill command is not available. Install or update the gh skill extension first.";
 
 export type Frontmatter = {
   values: Record<string, string>;
@@ -51,6 +56,27 @@ export type InstallCommand = {
   args: string[];
   command: string;
 };
+
+export function checkGhCommand(command = "gh"): string | null {
+  const result = spawnSync(command, ["--version"], { stdio: "ignore" });
+  if (result.error) {
+    return result.error.message.includes("ENOENT")
+      ? GH_MISSING_MESSAGE
+      : `gh command check failed: ${result.error.message}`;
+  }
+  if (result.status !== 0) {
+    return `gh command check failed with exit ${result.status ?? 1}.`;
+  }
+
+  const skillResult = spawnSync(command, ["skill", "install", "--help"], { stdio: "ignore" });
+  if (skillResult.error) {
+    return `gh skill command check failed: ${skillResult.error.message}`;
+  }
+  if (skillResult.status !== 0) {
+    return GH_SKILL_MISSING_MESSAGE;
+  }
+  return null;
+}
 
 export class SkillInstance {
   readonly agent: AgentName;

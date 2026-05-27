@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { AGENTS, type AgentName, SkillManager } from "./core.ts";
+import { AGENTS, type AgentName, checkGhCommand, SkillManager } from "./core.ts";
 import { runTui } from "./tui.ts";
 
 type ParsedArgs = {
@@ -128,6 +128,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     if (commands.length === 0) {
       console.log(`No missing agents for ${skill}.`);
       return 0;
+    }
+
+    if (execute) {
+      const ghError = checkGhCommand();
+      if (ghError) {
+        console.error(ghError);
+        return 1;
+      }
     }
 
     for (const command of commands) {

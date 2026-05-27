@@ -58,6 +58,8 @@ Agent 向けの `gh skill install --scope user --agent ...` コマンドを作�
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
+実際のインストールには `gh skill install` が必要です。dry-run の `install-missing` は
+`gh` がなくてもコマンド表示だけ行えます。
 
 ## TUI
 

@@ -5,6 +5,7 @@ import {
   AGENT_COLUMN_WIDTHS,
   AGENTS,
   type AgentName,
+  checkGhCommand,
   formatStatus,
   type InstallCommand,
   SkillManager,
@@ -309,6 +310,12 @@ class SkillTui {
     }
     if (this.pending.size > 0) {
       this.message = "Save or reload pending changes before installing missing skills.";
+      return;
+    }
+
+    const ghError = checkGhCommand();
+    if (ghError) {
+      this.message = ghError;
       return;
     }
 

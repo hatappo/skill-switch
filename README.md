@@ -58,6 +58,8 @@ pass `--execute` to run them.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.
+The actual install path requires `gh skill install` to be available; dry-run
+`install-missing` can still print commands without `gh`.
 
 TUI keys:
 
