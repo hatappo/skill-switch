@@ -1,0 +1,131 @@
+#!/usr/bin/env node
+
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+import { AGENTS, type AgentName, SkillManager } from "./core.ts";
+import { runTui } from "./tui.ts";
+
+type ParsedArgs = {
+  home: string;
+  command?: string;
+  rest: string[];
+};
+
+function parseArgs(argv: string[]): ParsedArgs {
+  let home = homedir();
+  const rest: string[] = [];
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (value === "--home") {
+      const next = argv[index + 1];
+      if (!next) {
+        throw new Error("--home requires a path");
+      }
+      home = resolve(next);
+      index += 1;
+    } else if (value.startsWith("--home=")) {
+      home = resolve(value.slice("--home=".length));
+    } else {
+      rest.push(value);
+    }
+  }
+
+  return { home, command: rest[0], rest: rest.slice(1) };
+}
+
+function usage(): string {
+  return [
+    "Usage:",
+    "  skill-switch [--home PATH] [tui]",
+    "  skill-switch [--home PATH] list [--format table|json]",
+    "  skill-switch [--home PATH] set <skill> <codex|claude-code|cursor|all>... <on|off>",
+  ].join("\n");
+}
+
+function parseAgents(values: string[]): AgentName[] {
+  if (values.includes("all")) {
+    return [...AGENTS];
+  }
+
+  return values.map((value) => {
+    if (!AGENTS.includes(value as AgentName)) {
+      throw new Error(`unsupported agent: ${value}`);
+    }
+    return value as AgentName;
+  });
+}
+
+export async function main(argv = process.argv.slice(2)): Promise<number> {
+  let args: ParsedArgs;
+  try {
+    args = parseArgs(argv);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    console.error(usage());
+    return 2;
+  }
+
+  const manager = new SkillManager(args.home);
+  const command = args.command ?? "tui";
+
+  if (command === "tui") {
+    return runTui(manager);
+  }
+
+  if (command === "list") {
+    const formatIndex = args.rest.indexOf("--format");
+    const format = formatIndex >= 0 ? args.rest[formatIndex + 1] : "table";
+    if (format !== "table" && format !== "json") {
+      console.error("--format must be table or json");
+      return 2;
+    }
+
+    const rows = manager.scan();
+    if (format === "json") {
+      console.log(JSON.stringify(rows.map((row) => row.toJSON()), null, 2));
+    } else {
+      console.log(manager.formatTable(rows));
+    }
+    return 0;
+  }
+
+  if (command === "set") {
+    const [skill, ...values] = args.rest;
+    if (!skill || values.length < 2) {
+      console.error("set requires <skill>, at least one agent, and final state on|off");
+      console.error(usage());
+      return 2;
+    }
+
+    const state = values.at(-1);
+    if (state !== "on" && state !== "off") {
+      console.error("set state must be on or off");
+      return 2;
+    }
+
+    let agents: AgentName[];
+    try {
+      agents = parseAgents(values.slice(0, -1));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 2;
+    }
+
+    const changed = manager.applyState(skill, agents, state === "on");
+    if (changed.length === 0) {
+      console.error(`No installed skill named ${JSON.stringify(skill)} matched those agents.`);
+      return 1;
+    }
+    console.log(`Updated ${skill}: ${changed.join(", ")} -> ${state}`);
+    return 0;
+  }
+
+  console.error(`unknown command: ${command}`);
+  console.error(usage());
+  return 2;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.exitCode = await main();
+}

@@ -1,0 +1,19 @@
+{
+  "name": "skill-switch",
+  "version": "0.1.0",
+  "description": "TUI for switching user-level Agent Skills across Codex, Claude Code, and Cursor.",
+  "packageManager": "pnpm@11.3.0",
+  "type": "module",
+  "bin": {
+    "skill-switch": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "lint": "node --check src/cli.ts && node --check src/core.ts && node --check src/tui.ts && node --check tests/core.test.ts",
+    "test": "node --test tests/*.test.ts",
+    "check": "pnpm lint && pnpm test"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}
