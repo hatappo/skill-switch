@@ -136,7 +136,7 @@ class SkillTui {
 
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
     this.writeLine("skill-switch | Space=cell | a=row toggle | o=row on | x=row off", width, true);
-    this.writeLine("             | i=install missing | s=save | r=reload | q=quit", width);
+    this.writeLine("             | i=install missing | s=save | r=reload | q=quit", width, true);
     this.writeLine(
       [
         "Skill".padEnd(nameWidth),

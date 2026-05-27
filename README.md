@@ -71,19 +71,19 @@ Status colors:
 | `-`            | Dim gray           |
 | Unsaved change | Bold cyan with `*` |
 
-| Key                     | Action                                                            |
-| ----------------------- | ----------------------------------------------------------------- |
-| `Up`/`Down`, `j`/`k`    | Move between skills                                               |
-| `Left`/`Right`, `h`/`l` | Move between agent columns                                        |
-| `Space`                 | Toggle the selected skill for the selected agent                  |
-| `a`                     | Toggle the selected skill row across all agents where it exists   |
-| `o`                     | Enable the selected skill row across all agents where it exists   |
-| `x`                     | Disable the selected skill row across all agents where it exists  |
-| `i`                     | Prepare `gh skill install` for missing agents on the selected row |
-| `y`/`n`                 | Confirm or cancel a prepared install                              |
-| `s`                     | Save pending changes                                              |
-| `r`                     | Reload from disk and clear pending changes                        |
-| `q`                     | Quit                                                              |
+| Key                     | Command         | Action                                                            |
+| ----------------------- | --------------- | ----------------------------------------------------------------- |
+| `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |
+| `Left`/`Right`, `h`/`l` | move column     | Move between agent columns                                        |
+| `Space`                 | toggle cell     | Toggle the selected skill for the selected agent                  |
+| `a`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
+| `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
+| `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
+| `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
+| `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
+| `s`                     | save            | Save pending changes                                              |
+| `r`                     | reload          | Reload from disk and clear pending changes                        |
+| `q`                     | quit            | Quit                                                              |
 
 ## References
 

@@ -73,19 +73,19 @@ TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y
 
 キー操作:
 
-| Key                     | 動作                                             |
-| ----------------------- | ------------------------------------------------ |
-| `Up`/`Down`, `j`/`k`    | skill 行を移動                                   |
-| `Left`/`Right`, `h`/`l` | Agent 列を移動                                   |
-| `Space`                 | 選択中のセルだけ On/Off                          |
-| `a`                     | 選択中の skill 行を、存在する Agent 全体でトグル |
-| `o`                     | 選択中の skill 行を、存在する Agent 全体で ON    |
-| `x`                     | 選択中の skill 行を、存在する Agent 全体で OFF   |
-| `i`                     | 選択中の skill を未導入 Agent へ入れる準備       |
-| `y`/`n`                 | 準備したインストールの実行/キャンセル            |
-| `s`                     | 未保存変更を保存                                 |
-| `r`                     | ディスクから再読み込みし、未保存変更を破棄       |
-| `q`                     | 終了                                             |
+| Key                     | コマンド        | 動作                                             |
+| ----------------------- | --------------- | ------------------------------------------------ |
+| `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                   |
+| `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                   |
+| `Space`                 | toggle cell     | 選択中のセルだけ On/Off                          |
+| `a`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
+| `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
+| `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
+| `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
+| `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
+| `s`                     | save            | 未保存変更を保存                                 |
+| `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
+| `q`                     | quit            | 終了                                             |
 
 ## 参考
 
