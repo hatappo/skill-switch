@@ -45,6 +45,8 @@ pnpm start
 確認や dry-run install 用の補助コマンドとして、`list` と `install-missing` だけ残しています。
 
 ```bash
+node src/cli.ts help
+node src/cli.ts --version
 node src/cli.ts list
 node src/cli.ts list --format json
 node src/cli.ts install-missing frontend-design

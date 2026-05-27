@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { AGENTS, type AgentName, checkGhCommand, SkillManager } from "./core.ts";
@@ -39,11 +40,21 @@ function usage(): string {
   return [
     "Usage:",
     "  skill-switch [--home PATH] [tui]",
+    "  skill-switch help",
+    "  skill-switch version",
     "",
     "Advanced:",
     "  skill-switch [--home PATH] list [--format table|json]",
     "  skill-switch [--home PATH] install-missing <skill> [agent|all]... [--execute]",
   ].join("\n");
+}
+
+function packageVersion(): string {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  if (!packageJson || typeof packageJson.version !== "string") {
+    throw new Error("package.json version is missing");
+  }
+  return packageJson.version;
 }
 
 function parseAgents(values: string[]): AgentName[] {
@@ -71,6 +82,16 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 
   const manager = new SkillManager(args.home);
   const command = args.command ?? "tui";
+
+  if (command === "help" || command === "--help" || command === "-h") {
+    console.log(usage());
+    return 0;
+  }
+
+  if (command === "version" || command === "--version" || command === "-v") {
+    console.log(packageVersion());
+    return 0;
+  }
 
   if (command === "tui") {
     return runTui(manager);

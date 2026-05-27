@@ -45,6 +45,8 @@ Run without arguments to open the TUI.
 Advanced helper commands are kept for inspection and dry-run install workflows:
 
 ```bash
+node src/cli.ts help
+node src/cli.ts --version
 node src/cli.ts list
 node src/cli.ts list --format json
 node src/cli.ts install-missing frontend-design
