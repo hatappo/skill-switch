@@ -27,17 +27,37 @@ export type Frontmatter = {
   bounds: [number, number] | null;
 };
 
+export type SkillProvenance = {
+  repository: string;
+  skillPath: string;
+  pin?: string;
+};
+
+export type InstallCommand = {
+  agent: AgentName;
+  args: string[];
+  command: string;
+};
+
 export class SkillInstance {
   readonly agent: AgentName;
   readonly name: string;
   readonly path: string;
   readonly enabled: boolean;
+  readonly provenance: SkillProvenance | null;
 
-  constructor(agent: AgentName, name: string, path: string, enabled: boolean) {
+  constructor(
+    agent: AgentName,
+    name: string,
+    path: string,
+    enabled: boolean,
+    provenance: SkillProvenance | null = null,
+  ) {
     this.agent = agent;
     this.name = name;
     this.path = path;
     this.enabled = enabled;
+    this.provenance = provenance;
   }
 
   toJSON(): Record<string, unknown> {
@@ -46,6 +66,7 @@ export class SkillInstance {
       name: this.name,
       path: this.path,
       enabled: this.enabled,
+      provenance: this.provenance,
     };
   }
 }
@@ -156,11 +177,66 @@ function parseSimpleYaml(lines: string[]): Record<string, string> {
 
 export function frontmatterName(path: string): string {
   try {
-    const { values } = parseFrontmatter(readFileSync(path, "utf8"));
-    return values.name || basename(dirname(path));
+    return skillFrontmatter(path).name || basename(dirname(path));
   } catch {
     return basename(dirname(path));
   }
+}
+
+function skillFrontmatter(path: string): Record<string, string> {
+  return parseFrontmatter(readFileSync(path, "utf8")).values;
+}
+
+export function provenanceFromFrontmatter(values: Record<string, string>): SkillProvenance | null {
+  const rawRepository = values["github-repo"];
+  const rawSkillPath = values["github-path"];
+  if (!rawRepository || !rawSkillPath) {
+    return null;
+  }
+
+  const repository = normalizeGitHubRepository(rawRepository);
+  if (!repository) {
+    return null;
+  }
+
+  const provenance: SkillProvenance = {
+    repository,
+    skillPath: normalizeSkillPath(rawSkillPath),
+  };
+  const pin = pinFromGitHubRef(values["github-ref"]);
+  if (pin) {
+    provenance.pin = pin;
+  }
+  return provenance;
+}
+
+function normalizeGitHubRepository(value: string): string | null {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+  if (match) {
+    return match[1];
+  }
+  if (/^[^/\s]+\/[^/\s]+$/.test(trimmed)) {
+    return trimmed.replace(/\.git$/, "");
+  }
+  return null;
+}
+
+function normalizeSkillPath(value: string): string {
+  return value.replace(/\/SKILL\.md$/, "");
+}
+
+function pinFromGitHubRef(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.startsWith("refs/tags/")) {
+    return value.slice("refs/tags/".length);
+  }
+  if (/^[0-9a-f]{7,40}$/i.test(value)) {
+    return value;
+  }
+  return undefined;
 }
 
 function basename(path: string): string {
@@ -354,11 +430,13 @@ class CodexAdapter implements Adapter {
     return this.roots.flatMap((root) =>
       discoverSkillFiles(root).map((path) => {
         const resolved = resolve(path);
+        const values = skillFrontmatter(path);
         return new SkillInstance(
           "codex",
-          frontmatterName(path),
+          values.name || basename(dirname(path)),
           path,
           configured.get(resolved) ?? true,
+          provenanceFromFrontmatter(values),
         );
       }),
     );
@@ -384,8 +462,15 @@ class ClaudeAdapter implements Adapter {
     const settings = readJson(this.settingsPath);
     const overrides = readObject(settings.skillOverrides);
     return discoverSkillFiles(this.root).map((path) => {
-      const name = frontmatterName(path);
-      return new SkillInstance("claude-code", name, path, overrides[name] !== "off");
+      const values = skillFrontmatter(path);
+      const name = values.name || basename(dirname(path));
+      return new SkillInstance(
+        "claude-code",
+        name,
+        path,
+        overrides[name] !== "off",
+        provenanceFromFrontmatter(values),
+      );
     });
   }
 
@@ -408,9 +493,15 @@ class CursorAdapter implements Adapter {
 
   discover(): SkillInstance[] {
     return discoverSkillFiles(this.root).map((path) => {
-      const { values } = parseFrontmatter(readFileSync(path, "utf8"));
+      const values = skillFrontmatter(path);
       const disabled = values["disable-model-invocation"]?.toLowerCase() === "true";
-      return new SkillInstance("cursor", values.name || basename(dirname(path)), path, !disabled);
+      return new SkillInstance(
+        "cursor",
+        values.name || basename(dirname(path)),
+        path,
+        !disabled,
+        provenanceFromFrontmatter(values),
+      );
     });
   }
 
@@ -472,6 +563,46 @@ export class SkillManager {
     return changed;
   }
 
+  buildInstallMissingCommands(
+    skillName: string,
+    agents: AgentName[] = [...AGENTS],
+  ): InstallCommand[] {
+    const row = this.scan().find((item) => item.name === skillName);
+    if (!row) {
+      throw new Error(`No installed skill named ${JSON.stringify(skillName)}.`);
+    }
+
+    const source = AGENTS.flatMap((agent) => row.instances[agent]).find(
+      (instance) => instance.provenance !== null,
+    )?.provenance;
+    if (!source) {
+      throw new Error(`No GitHub provenance metadata found for ${JSON.stringify(skillName)}.`);
+    }
+
+    return agents
+      .filter((agent) => row.instances[agent].length === 0)
+      .map((agent) => {
+        const args = [
+          "skill",
+          "install",
+          source.repository,
+          source.skillPath,
+          "--scope",
+          "user",
+          "--agent",
+          agent,
+        ];
+        if (source.pin) {
+          args.push("--pin", source.pin);
+        }
+        return {
+          agent,
+          args,
+          command: ["gh", ...args].map(shellQuote).join(" "),
+        };
+      });
+  }
+
   formatTable(rows = this.scan()): string {
     const nameWidth = Math.max("Skill".length, ...rows.map((row) => row.name.length));
     const lines = [
@@ -486,6 +617,13 @@ export class SkillManager {
     }
     return lines.join("\n");
   }
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:@-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 export function formatStatus(status: SkillStatus): string {

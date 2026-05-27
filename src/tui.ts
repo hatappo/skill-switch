@@ -1,15 +1,21 @@
+import { spawnSync } from "node:child_process";
 import readline from "node:readline";
 import {
   AGENT_LABELS,
   AGENTS,
   type AgentName,
   formatStatus,
+  type InstallCommand,
   SkillManager,
   type SkillRow,
 } from "./core.ts";
 
 type PendingKey = `${string}\0${AgentName}`;
 type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
+type InstallPlan = {
+  skill: string;
+  commands: InstallCommand[];
+};
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -33,6 +39,7 @@ class SkillTui {
   private rowIndex = 0;
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
+  private installPlan: InstallPlan | null = null;
   private message = "";
 
   constructor(manager: SkillManager) {
@@ -75,6 +82,9 @@ class SkillTui {
     if (key.ctrl && key.name === "c") {
       return true;
     }
+    if (this.installPlan) {
+      return this.handleInstallConfirmation(key);
+    }
     if (key.name === "q" || key.name === "escape") {
       if (this.pending.size > 0) {
         this.message = "Pending changes remain. Press s to save or r to discard.";
@@ -103,6 +113,8 @@ class SkillTui {
     } else if (key.name === "r") {
       this.pending.clear();
       this.reload();
+    } else if (key.name === "i") {
+      this.prepareInstallMissing();
     }
     return false;
   }
@@ -119,7 +131,7 @@ class SkillTui {
 
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
     this.writeLine("skill-switch | Space=cell | a=row toggle | o=row on | x=row off", width, true);
-    this.writeLine("             | s=save | r=reload | q=quit", width);
+    this.writeLine("             | i=install missing | s=save | r=reload | q=quit", width);
     this.writeLine(
       `${"Skill".padEnd(nameWidth)}  ${AGENT_LABELS.codex.padStart(6)}  ${AGENT_LABELS["claude-code"].padStart(11)}  ${AGENT_LABELS.cursor.padStart(6)}`,
       width,
@@ -169,6 +181,22 @@ class SkillTui {
 
   private currentRow(): SkillRow | undefined {
     return this.rows[this.rowIndex];
+  }
+
+  private handleInstallConfirmation(key: readline.Key): boolean {
+    const plan = this.installPlan;
+    if (!plan) {
+      return false;
+    }
+    if (key.name === "y") {
+      this.executeInstallPlan();
+    } else if (key.name === "n" || key.name === "escape") {
+      this.installPlan = null;
+      this.message = `Cancelled install for ${plan.skill}.`;
+    } else {
+      this.message = "Install is ready. Press y to run gh skill install, or n to cancel.";
+    }
+    return false;
   }
 
   private displayStatus(row: SkillRow, agent: AgentName): DisplayStatus {
@@ -264,6 +292,69 @@ class SkillTui {
     this.pending.clear();
     this.reload();
     this.message = `Saved ${changed} agent changes.`;
+  }
+
+  private prepareInstallMissing(): void {
+    const row = this.currentRow();
+    if (!row) {
+      return;
+    }
+    if (this.pending.size > 0) {
+      this.message = "Save or reload pending changes before installing missing skills.";
+      return;
+    }
+
+    let commands: InstallCommand[];
+    try {
+      commands = this.manager.buildInstallMissingCommands(row.name);
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error);
+      return;
+    }
+
+    if (commands.length === 0) {
+      this.message = `${row.name} is already installed for all supported agents.`;
+      return;
+    }
+
+    this.installPlan = { skill: row.name, commands };
+    const agents = commands.map((command) => AGENT_LABELS[command.agent]).join(", ");
+    this.message = `Install ${row.name} for ${agents}? Press y to run gh, n to cancel.`;
+  }
+
+  private executeInstallPlan(): void {
+    const plan = this.installPlan;
+    if (!plan) {
+      return;
+    }
+    this.installPlan = null;
+
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdout.write("\x1b[?25h\x1b[0m\n");
+
+    let installed = 0;
+    let resultMessage = "";
+    for (const command of plan.commands) {
+      console.log(`$ ${command.command}`);
+      const result = spawnSync("gh", command.args, { stdio: "inherit" });
+      if (result.error) {
+        resultMessage = `Failed to run gh: ${result.error.message}`;
+        break;
+      }
+      if (result.status !== 0) {
+        resultMessage = `Install failed for ${AGENT_LABELS[command.agent]} with exit ${result.status ?? 1}.`;
+        break;
+      }
+      installed += 1;
+    }
+
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
+    this.reload();
+    this.message = resultMessage || `Installed ${plan.skill} for ${installed} missing agents.`;
   }
 
   private key(skill: string, agent: AgentName): PendingKey {

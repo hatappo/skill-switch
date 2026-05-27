@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { AGENTS, type AgentName, SkillManager } from "./core.ts";
@@ -40,6 +41,7 @@ function usage(): string {
     "  skill-switch [--home PATH] [tui]",
     "  skill-switch [--home PATH] list [--format table|json]",
     "  skill-switch [--home PATH] set <skill> <codex|claude-code|cursor|all>... <on|off>",
+    "  skill-switch [--home PATH] install-missing <skill> [codex|claude-code|cursor|all]... [--execute]",
   ].join("\n");
 }
 
@@ -124,6 +126,53 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 1;
     }
     console.log(`Updated ${skill}: ${changed.join(", ")} -> ${state}`);
+    return 0;
+  }
+
+  if (command === "install-missing") {
+    const [skill, ...values] = args.rest;
+    if (!skill) {
+      console.error("install-missing requires <skill>");
+      console.error(usage());
+      return 2;
+    }
+
+    const execute = values.includes("--execute");
+    const agentValues = values.filter((value) => value !== "--execute");
+    let agents: AgentName[];
+    try {
+      agents = parseAgents(agentValues.length > 0 ? agentValues : ["all"]);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 2;
+    }
+
+    let commands;
+    try {
+      commands = manager.buildInstallMissingCommands(skill, agents);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+
+    if (commands.length === 0) {
+      console.log(`No missing agents for ${skill}.`);
+      return 0;
+    }
+
+    for (const command of commands) {
+      console.log(command.command);
+      if (execute) {
+        const result = spawnSync("gh", command.args, { stdio: "inherit" });
+        if (result.status !== 0) {
+          return result.status ?? 1;
+        }
+      }
+    }
+
+    if (!execute) {
+      console.log("Dry run. Add --execute to run these commands.");
+    }
     return 0;
   }
 

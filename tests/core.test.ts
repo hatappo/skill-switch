@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   discoverSkillFiles,
   parseFrontmatter,
+  provenanceFromFrontmatter,
   readCodexSkillEnabled,
   setCodexSkillEnabled,
   SkillManager,
@@ -34,6 +35,27 @@ test("parseFrontmatter parses simple YAML frontmatter", () => {
   assert.equal(parsed.values.name, "test");
   assert.equal(parsed.values.description, "Hi");
   assert.deepEqual(parsed.bounds, [0, 3]);
+});
+
+test("provenanceFromFrontmatter reads GitHub metadata", () => {
+  const parsed = parseFrontmatter(
+    [
+      "---",
+      "name: demo",
+      "metadata:",
+      "    github-path: skills/demo",
+      "    github-ref: refs/tags/v1.2.3",
+      "    github-repo: https://github.com/example/skills",
+      "---",
+      "",
+    ].join("\n"),
+  );
+
+  assert.deepEqual(provenanceFromFrontmatter(parsed.values), {
+    repository: "example/skills",
+    skillPath: "skills/demo",
+    pin: "v1.2.3",
+  });
 });
 
 test("updateFrontmatterKey replaces existing key", () => {
@@ -116,4 +138,29 @@ test("applyState uses agent-specific storage", () => {
   const claudeSettings = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
   assert.equal(claudeSettings.skillOverrides.demo, "off");
   assert.match(readFileSync(cursorSkill, "utf8"), /disable-model-invocation: true/);
+});
+
+test("buildInstallMissingCommands uses provenance from installed agents", () => {
+  const home = tmpHome();
+  writeSkill(
+    join(home, ".claude", "skills", "demo", "SKILL.md"),
+    "demo",
+    [
+      "metadata:",
+      "    github-path: skills/demo",
+      "    github-ref: refs/heads/main",
+      "    github-repo: https://github.com/example/skills",
+      "",
+    ].join("\n"),
+  );
+
+  const commands = new SkillManager(home).buildInstallMissingCommands("demo", ["codex", "cursor"]);
+
+  assert.deepEqual(
+    commands.map((command) => command.args),
+    [
+      ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "codex"],
+      ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "cursor"],
+    ],
+  );
 });

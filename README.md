@@ -44,7 +44,17 @@ node src/cli.ts list
 node src/cli.ts list --format json
 node src/cli.ts set sample-skill all off
 node src/cli.ts set sample-skill codex claude-code on
+node src/cli.ts install-missing frontend-design
+node src/cli.ts install-missing frontend-design cursor --execute
 ```
+
+`install-missing` reads `metadata.github-repo` and `metadata.github-path` from an
+installed skill's `SKILL.md`, then builds `gh skill install --scope user --agent ...`
+commands for agents where that skill is missing. It prints commands by default;
+pass `--execute` to run them.
+
+The TUI also supports this workflow: select a skill row, press `i`, then confirm
+with `y` to install that skill for every supported agent where it is missing.
 
 TUI keys:
 
@@ -58,17 +68,19 @@ Status colors:
 | `-`            | Dim gray           |
 | Unsaved change | Bold cyan with `*` |
 
-| Key                     | Action                                                           |
-| ----------------------- | ---------------------------------------------------------------- |
-| `Up`/`Down`, `j`/`k`    | Move between skills                                              |
-| `Left`/`Right`, `h`/`l` | Move between agent columns                                       |
-| `Space`                 | Toggle the selected skill for the selected agent                 |
-| `a`                     | Toggle the selected skill row across all agents where it exists  |
-| `o`                     | Enable the selected skill row across all agents where it exists  |
-| `x`                     | Disable the selected skill row across all agents where it exists |
-| `s`                     | Save pending changes                                             |
-| `r`                     | Reload from disk and clear pending changes                       |
-| `q`                     | Quit                                                             |
+| Key                     | Action                                                            |
+| ----------------------- | ----------------------------------------------------------------- |
+| `Up`/`Down`, `j`/`k`    | Move between skills                                               |
+| `Left`/`Right`, `h`/`l` | Move between agent columns                                        |
+| `Space`                 | Toggle the selected skill for the selected agent                  |
+| `a`                     | Toggle the selected skill row across all agents where it exists   |
+| `o`                     | Enable the selected skill row across all agents where it exists   |
+| `x`                     | Disable the selected skill row across all agents where it exists  |
+| `i`                     | Prepare `gh skill install` for missing agents on the selected row |
+| `y`/`n`                 | Confirm or cancel a prepared install                              |
+| `s`                     | Save pending changes                                              |
+| `r`                     | Reload from disk and clear pending changes                        |
+| `q`                     | Quit                                                              |
 
 ## Checks
 

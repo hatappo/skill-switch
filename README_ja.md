@@ -44,7 +44,17 @@ node src/cli.ts list
 node src/cli.ts list --format json
 node src/cli.ts set sample-skill all off
 node src/cli.ts set sample-skill codex claude-code on
+node src/cli.ts install-missing frontend-design
+node src/cli.ts install-missing frontend-design cursor --execute
 ```
+
+`install-missing` は、既にインストール済みの skill の `SKILL.md` から
+`metadata.github-repo` と `metadata.github-path` を読み取り、その skill が存在しない
+Agent 向けの `gh skill install --scope user --agent ...` コマンドを作ります。デフォルトでは
+コマンド表示だけを行い、`--execute` を付けた場合だけ実行します。
+
+TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
+存在しない対応 Agent へまとめてインストールします。
 
 ## TUI
 
@@ -68,6 +78,8 @@ node src/cli.ts set sample-skill codex claude-code on
 | `a`                     | 選択中の skill 行を、存在する Agent 全体でトグル |
 | `o`                     | 選択中の skill 行を、存在する Agent 全体で ON    |
 | `x`                     | 選択中の skill 行を、存在する Agent 全体で OFF   |
+| `i`                     | 選択中の skill を未導入 Agent へ入れる準備       |
+| `y`/`n`                 | 準備したインストールの実行/キャンセル            |
 | `s`                     | 未保存変更を保存                                 |
 | `r`                     | ディスクから再読み込みし、未保存変更を破棄       |
 | `q`                     | 終了                                             |
