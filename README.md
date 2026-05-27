@@ -2,11 +2,20 @@
   <a href="./README.md">en</a> | <a href="./README_ja.md">ja</a>
 </p>
 
-# skill-switch
+# skwitch
 
-`skill-switch` is a dependency-free TypeScript TUI for viewing and toggling user-level Agent Skills across multiple coding agents.
+`skwitch` is a TUI for switching AI agent skills across agents.
 
 It matches skills by the `name` field in `SKILL.md` frontmatter, falling back to the parent directory name when `name` is missing.
+
+![skwitch TUI screenshot](./docs/screenshot-tui.png)
+
+## Features
+
+- Toggle skills across supported agents from one table.
+- Uses each agent's native enable/disable settings instead of renaming skill directories.
+- Can install missing skills through `gh skill install` when provenance metadata is available.
+- Has no runtime package dependencies.
 
 ## Supported agents
 
@@ -27,11 +36,11 @@ Cursor's `~/.cursor/skills-cursor` directory is managed by Cursor itself and is 
 
 ## Usage
 
-Install it locally if you want the `skill-switch` command:
+Install it locally if you want the `skwitch` command:
 
 ```bash
 pnpm link --global
-skill-switch
+skwitch
 ```
 
 Or run it directly from the repository:

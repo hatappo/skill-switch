@@ -1,10 +1,36 @@
 {
-  "name": "skill-switch",
+  "name": "skwitch",
   "version": "0.1.0",
-  "description": "TUI for switching user-level Agent Skills across multiple coding agents.",
-  "bin": {
-    "skill-switch": "./src/cli.ts"
+  "description": "TUI for switching AI agent skills across agents.",
+  "keywords": [
+    "agent-skills",
+    "ai",
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli",
+    "github-copilot",
+    "opencode",
+    "tui"
+  ],
+  "homepage": "https://github.com/hatappo/skill-switch#readme",
+  "bugs": {
+    "url": "https://github.com/hatappo/skill-switch/issues"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hatappo/skill-switch.git"
+  },
+  "bin": {
+    "skwitch": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "README_ja.md"
+  ],
   "type": "module",
   "scripts": {
     "start": "node src/cli.ts",
@@ -16,7 +42,8 @@
     "syntax": "node --check src/cli.ts && node --check src/core.ts && node --check src/tui.ts && node --check tests/core.test.ts",
     "test": "node --test tests/*.test.ts",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm syntax && pnpm test",
-    "fix": "pnpm format && pnpm lint:fix && pnpm typecheck && pnpm syntax && pnpm test"
+    "fix": "pnpm format && pnpm lint:fix && pnpm typecheck && pnpm syntax && pnpm test",
+    "prepublishOnly": "pnpm verify"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

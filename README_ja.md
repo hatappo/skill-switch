@@ -2,11 +2,20 @@
   <a href="./README.md">en</a> | <a href="./README_ja.md">ja</a>
 </p>
 
-# skill-switch
+# skwitch
 
-`skill-switch` は、複数の coding agent の user-level Agent Skills を横断して一覧表示し、On/Off を切り替える依存パッケージなしの TypeScript TUI です。
+`skwitch` は、複数の Agent Skill の有効/無効をエージェント横断でまとめて切り替える TUI です。
 
 Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`name` がない場合は親ディレクトリ名を使います。
+
+![skwitch TUI screenshot](./docs/screenshot-tui.png)
+
+## 特長
+
+- 対応 Agent の skill をひとつのテーブルで横断的に On/Off できます。
+- skill ディレクトリの rename ではなく、各 Agent の native な有効/無効設定を使います。
+- provenance metadata がある場合、`gh skill install` で未導入 Agent へ skill を追加できます。
+- runtime package dependency はありません。
 
 ## 対応 Agent
 
@@ -27,11 +36,11 @@ Cursor は Codex のような path ベースの一括 On/Off 設定を公開し�
 
 ## 使い方
 
-`skill-switch` コマンドとして使いたい場合:
+`skwitch` コマンドとして使いたい場合:
 
 ```bash
 pnpm link --global
-skill-switch
+skwitch
 ```
 
 リポジトリから直接起動する場合:
