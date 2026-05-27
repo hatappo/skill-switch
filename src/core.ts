@@ -1,4 +1,11 @@
-import { type Dirent, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 export const AGENTS = ["codex", "claude-code", "cursor"] as const;
@@ -135,7 +142,10 @@ function parseSimpleYaml(lines: string[]): Record<string, string> {
     }
     const [rawKey, ...rest] = line.split(":");
     const key = rawKey.trim();
-    const value = rest.join(":").trim().replace(/^["']|["']$/g, "");
+    const value = rest
+      .join(":")
+      .trim()
+      .replace(/^["']|["']$/g, "");
     if (key) {
       values[key] = value;
     }
@@ -266,7 +276,11 @@ function parseTomlBoolean(lines: string[], key: string): boolean | null {
   return null;
 }
 
-export function setCodexSkillEnabled(configPath: string, skillPath: string, enabled: boolean): void {
+export function setCodexSkillEnabled(
+  configPath: string,
+  skillPath: string,
+  enabled: boolean,
+): void {
   mkdirSync(dirname(configPath), { recursive: true });
   const target = resolve(skillPath);
   const lines = existsSync(configPath) ? readFileSync(configPath, "utf8").split(/(?<=\n)/) : [];
@@ -338,7 +352,12 @@ class CodexAdapter implements Adapter {
     return this.roots.flatMap((root) =>
       discoverSkillFiles(root).map((path) => {
         const resolved = resolve(path);
-        return new SkillInstance("codex", frontmatterName(path), path, configured.get(resolved) ?? true);
+        return new SkillInstance(
+          "codex",
+          frontmatterName(path),
+          path,
+          configured.get(resolved) ?? true,
+        );
       }),
     );
   }

@@ -77,7 +77,11 @@ test("SkillManager matches skills by name across agents", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
   writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo");
-  writeSkill(join(home, ".cursor", "skills", "demo", "SKILL.md"), "demo", "disable-model-invocation: true\n");
+  writeSkill(
+    join(home, ".cursor", "skills", "demo", "SKILL.md"),
+    "demo",
+    "disable-model-invocation: true\n",
+  );
 
   const rows = new SkillManager(home).scan();
 
@@ -97,10 +101,17 @@ test("applyState uses agent-specific storage", () => {
   writeSkill(claudeSkill, "demo");
   writeSkill(cursorSkill, "demo");
 
-  const changed = new SkillManager(home).applyState("demo", ["codex", "claude-code", "cursor"], false);
+  const changed = new SkillManager(home).applyState(
+    "demo",
+    ["codex", "claude-code", "cursor"],
+    false,
+  );
 
   assert.deepEqual(changed, ["codex", "claude-code", "cursor"]);
-  assert.equal(readCodexSkillEnabled(join(home, ".codex", "config.toml")).get(resolve(codexSkill)), false);
+  assert.equal(
+    readCodexSkillEnabled(join(home, ".codex", "config.toml")).get(resolve(codexSkill)),
+    false,
+  );
 
   const claudeSettings = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
   assert.equal(claudeSettings.skillOverrides.demo, "off");

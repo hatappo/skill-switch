@@ -1,5 +1,12 @@
 import readline from "node:readline";
-import { AGENT_LABELS, AGENTS, type AgentName, formatStatus, SkillManager, type SkillRow } from "./core.ts";
+import {
+  AGENT_LABELS,
+  AGENTS,
+  type AgentName,
+  formatStatus,
+  SkillManager,
+  type SkillRow,
+} from "./core.ts";
 
 type PendingKey = `${string}\0${AgentName}`;
 type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
@@ -139,10 +146,25 @@ class SkillTui {
   }
 
   private writeLine(text: string, width: number, bold = false): void {
-    const visible = text.replace(/\x1b\[[0-9;]*m/g, "");
+    const visible = this.stripAnsi(text);
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
     process.stdout.write(`${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}\n`);
+  }
+
+  private stripAnsi(text: string): string {
+    let output = "";
+    for (let index = 0; index < text.length; index += 1) {
+      if (text[index] === "\x1b" && text[index + 1] === "[") {
+        index += 2;
+        while (index < text.length && text[index] !== "m") {
+          index += 1;
+        }
+      } else {
+        output += text[index];
+      }
+    }
+    return output;
   }
 
   private currentRow(): SkillRow | undefined {
@@ -157,7 +179,12 @@ class SkillTui {
     return formatStatus(row.status(agent)) as DisplayStatus;
   }
 
-  private renderStatusCell(row: SkillRow, agent: AgentName, selected: boolean, width: number): string {
+  private renderStatusCell(
+    row: SkillRow,
+    agent: AgentName,
+    selected: boolean,
+    width: number,
+  ): string {
     const pending = this.pending.has(this.key(row.name, agent));
     const label = `${this.displayStatus(row, agent)}${pending ? "*" : ""}`.padStart(width);
     const color = this.statusColor(this.displayStatus(row, agent), pending);

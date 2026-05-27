@@ -12,11 +12,11 @@ It matches skills by the `name` field in `SKILL.md` frontmatter, falling back to
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`, such as `codex`, `claude-code`, and `cursor`.
 
-| Agent | ID | User skill folders | Toggle mechanism |
-| --- | --- | --- |
-| Codex | `codex` | `~/.agents/skills`, `~/.codex/skills` | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
-| Claude Code | `claude-code` | `~/.claude/skills` | Writes `skillOverrides` in `~/.claude/settings.json` |
-| Cursor | `cursor` | `~/.cursor/skills` | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter |
+| Agent       | ID            | User skill folders                    | Toggle mechanism                                                                       |
+| ----------- | ------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| Codex       | `codex`       | `~/.agents/skills`, `~/.codex/skills` | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
+| Claude Code | `claude-code` | `~/.claude/skills`                    | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
+| Cursor      | `cursor`      | `~/.cursor/skills`                    | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
 
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
@@ -50,30 +50,33 @@ TUI keys:
 
 Status colors:
 
-| Status | Color |
-| --- | --- |
-| `ON` | Green |
-| `OFF` | Red |
-| `MIX` | Yellow |
-| `-` | Dim gray |
+| Status         | Color              |
+| -------------- | ------------------ |
+| `ON`           | Green              |
+| `OFF`          | Red                |
+| `MIX`          | Yellow             |
+| `-`            | Dim gray           |
 | Unsaved change | Bold cyan with `*` |
 
-| Key | Action |
-| --- | --- |
-| `Up`/`Down`, `j`/`k` | Move between skills |
-| `Left`/`Right`, `h`/`l` | Move between agent columns |
-| `Space` | Toggle the selected skill for the selected agent |
-| `a` | Toggle the selected skill row across all agents where it exists |
-| `o` | Enable the selected skill row across all agents where it exists |
-| `x` | Disable the selected skill row across all agents where it exists |
-| `s` | Save pending changes |
-| `r` | Reload from disk and clear pending changes |
-| `q` | Quit |
+| Key                     | Action                                                           |
+| ----------------------- | ---------------------------------------------------------------- |
+| `Up`/`Down`, `j`/`k`    | Move between skills                                              |
+| `Left`/`Right`, `h`/`l` | Move between agent columns                                       |
+| `Space`                 | Toggle the selected skill for the selected agent                 |
+| `a`                     | Toggle the selected skill row across all agents where it exists  |
+| `o`                     | Enable the selected skill row across all agents where it exists  |
+| `x`                     | Disable the selected skill row across all agents where it exists |
+| `s`                     | Save pending changes                                             |
+| `r`                     | Reload from disk and clear pending changes                       |
+| `q`                     | Quit                                                             |
 
 ## Checks
 
 ```bash
 pnpm check
+pnpm lint
+pnpm format:check
+pnpm format
 ```
 
 ## References

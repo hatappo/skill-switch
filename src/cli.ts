@@ -83,7 +83,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 
     const rows = manager.scan();
     if (format === "json") {
-      console.log(JSON.stringify(rows.map((row) => row.toJSON()), null, 2));
+      console.log(
+        JSON.stringify(
+          rows.map((row) => row.toJSON()),
+          null,
+          2,
+        ),
+      );
     } else {
       console.log(manager.formatTable(rows));
     }

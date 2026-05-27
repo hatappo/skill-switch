@@ -12,11 +12,11 @@ Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`na
 
 Agent ID は `gh skill install --help` の括弧内の名称に合わせています。例: `codex`、`claude-code`、`cursor`
 
-| Agent | ID | User skill folders | 反映先 |
-| --- | --- | --- | --- |
-| Codex | `codex` | `~/.agents/skills`, `~/.codex/skills` | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
-| Claude Code | `claude-code` | `~/.claude/skills` | `~/.claude/settings.json` の `skillOverrides` を書き込み |
-| Cursor | `cursor` | `~/.cursor/skills` | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み |
+| Agent       | ID            | User skill folders                    | 反映先                                                                          |
+| ----------- | ------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| Codex       | `codex`       | `~/.agents/skills`, `~/.codex/skills` | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
+| Claude Code | `claude-code` | `~/.claude/skills`                    | `~/.claude/settings.json` の `skillOverrides` を書き込み                        |
+| Cursor      | `cursor`      | `~/.cursor/skills`                    | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み     |
 
 Cursor は Codex のような path ベースの一括 On/Off 設定を公開していないため、このツールでは `disable-model-invocation` を使います。これは自動呼び出しを止める設定で、明示呼び出しの扱いは Cursor 側の仕様に従います。
 
@@ -50,32 +50,35 @@ node src/cli.ts set sample-skill codex claude-code on
 
 ステータス色:
 
-| Status | 色 |
-| --- | --- |
-| `ON` | 緑 |
-| `OFF` | 赤 |
-| `MIX` | 黄 |
-| `-` | グレー |
+| Status     | 色                   |
+| ---------- | -------------------- |
+| `ON`       | 緑                   |
+| `OFF`      | 赤                   |
+| `MIX`      | 黄                   |
+| `-`        | グレー               |
 | 未保存変更 | `*` 付きの太字シアン |
 
 キー操作:
 
-| Key | 動作 |
-| --- | --- |
-| `Up`/`Down`, `j`/`k` | skill 行を移動 |
-| `Left`/`Right`, `h`/`l` | Agent 列を移動 |
-| `Space` | 選択中のセルだけ On/Off |
-| `a` | 選択中の skill 行を、存在する Agent 全体でトグル |
-| `o` | 選択中の skill 行を、存在する Agent 全体で ON |
-| `x` | 選択中の skill 行を、存在する Agent 全体で OFF |
-| `s` | 未保存変更を保存 |
-| `r` | ディスクから再読み込みし、未保存変更を破棄 |
-| `q` | 終了 |
+| Key                     | 動作                                             |
+| ----------------------- | ------------------------------------------------ |
+| `Up`/`Down`, `j`/`k`    | skill 行を移動                                   |
+| `Left`/`Right`, `h`/`l` | Agent 列を移動                                   |
+| `Space`                 | 選択中のセルだけ On/Off                          |
+| `a`                     | 選択中の skill 行を、存在する Agent 全体でトグル |
+| `o`                     | 選択中の skill 行を、存在する Agent 全体で ON    |
+| `x`                     | 選択中の skill 行を、存在する Agent 全体で OFF   |
+| `s`                     | 未保存変更を保存                                 |
+| `r`                     | ディスクから再読み込みし、未保存変更を破棄       |
+| `q`                     | 終了                                             |
 
 ## チェック
 
 ```bash
 pnpm check
+pnpm lint
+pnpm format:check
+pnpm format
 ```
 
 ## 参考
