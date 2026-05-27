@@ -8,18 +8,31 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-export const AGENTS = ["codex", "claude-code", "cursor"] as const;
+export const AGENTS = [
+  "codex",
+  "claude-code",
+  "cursor",
+  "github-copilot",
+  "opencode",
+  "gemini-cli",
+] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type SkillStatus = "on" | "off" | "mixed" | "-";
 export const AGENT_LABELS: Record<AgentName, string> = {
   codex: "Codex",
   "claude-code": "Claude Code",
   cursor: "Cursor",
+  "github-copilot": "Copilot CLI",
+  opencode: "OpenCode",
+  "gemini-cli": "Gemini CLI",
 };
-const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
+export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   codex: 6,
   "claude-code": 11,
   cursor: 6,
+  "github-copilot": 11,
+  opencode: 8,
+  "gemini-cli": 10,
 };
 
 export type Frontmatter = {
@@ -73,11 +86,7 @@ export class SkillInstance {
 
 export class SkillRow {
   readonly name: string;
-  readonly instances: Record<AgentName, SkillInstance[]> = {
-    codex: [],
-    "claude-code": [],
-    cursor: [],
-  };
+  readonly instances: Record<AgentName, SkillInstance[]> = createAgentRecord(() => []);
 
   constructor(name: string) {
     this.name = name;
@@ -296,6 +305,25 @@ function writeJson(path: string, data: Record<string, unknown>): void {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function addString(value: unknown, item: string): string[] {
+  return [...new Set([...readStringArray(value), item])].sort();
+}
+
+function removeString(value: unknown, item: string): string[] {
+  return readStringArray(value).filter((entry) => entry !== item);
+}
+
+function createAgentRecord<T>(factory: (agent: AgentName) => T): Record<AgentName, T> {
+  return Object.fromEntries(AGENTS.map((agent) => [agent, factory(agent)])) as Record<AgentName, T>;
+}
+
 export function readCodexSkillEnabled(configPath: string): Map<string, boolean> {
   if (!existsSync(configPath)) {
     return new Map();
@@ -510,6 +538,179 @@ class CursorAdapter implements Adapter {
   }
 }
 
+class CopilotAdapter implements Adapter {
+  readonly roots: string[];
+  readonly settingsPath: string;
+  readonly home: string;
+
+  constructor(home: string) {
+    this.home = home;
+    this.roots = [join(home, ".copilot", "skills"), join(home, ".agents", "skills")];
+    this.settingsPath = join(home, ".copilot", "settings.json");
+  }
+
+  discover(): SkillInstance[] {
+    const settings = readJson(this.settingsPath);
+    const disabled = new Set(readStringArray(settings.disabledSkills));
+    return this.roots.flatMap((root) =>
+      discoverSkillFiles(root).map((path) => {
+        const values = skillFrontmatter(path);
+        const name = values.name || basename(dirname(path));
+        return new SkillInstance(
+          "github-copilot",
+          name,
+          path,
+          !disabled.has(name),
+          provenanceFromFrontmatter(values),
+        );
+      }),
+    );
+  }
+
+  setEnabled(instance: SkillInstance, enabled: boolean): void {
+    const settings = readJson(this.settingsPath);
+    settings.disabledSkills = enabled
+      ? removeString(settings.disabledSkills, instance.name)
+      : addString(settings.disabledSkills, instance.name);
+    writeJson(this.settingsPath, settings);
+  }
+}
+
+class OpenCodeAdapter implements Adapter {
+  readonly roots: string[];
+  readonly configPath: string;
+  readonly home: string;
+
+  constructor(home: string) {
+    this.home = home;
+    this.roots = [
+      join(home, ".config", "opencode", "skills"),
+      join(home, ".claude", "skills"),
+      join(home, ".agents", "skills"),
+    ];
+    this.configPath = join(home, ".config", "opencode", "opencode.json");
+  }
+
+  discover(): SkillInstance[] {
+    const config = readJson(this.configPath);
+    const skillPermissions = readSkillPermissions(config);
+    return this.roots.flatMap((root) =>
+      discoverSkillFiles(root).map((path) => {
+        const values = skillFrontmatter(path);
+        const name = values.name || basename(dirname(path));
+        return new SkillInstance(
+          "opencode",
+          name,
+          path,
+          skillPermissionFor(skillPermissions, name) !== "deny",
+          provenanceFromFrontmatter(values),
+        );
+      }),
+    );
+  }
+
+  setEnabled(instance: SkillInstance, enabled: boolean): void {
+    const config = readJson(this.configPath);
+    const permission = readObject(config.permission);
+    const skill = readObject(permission.skill);
+    skill[instance.name] = enabled ? "allow" : "deny";
+    permission.skill = skill;
+    config.permission = permission;
+    writeJson(this.configPath, config);
+  }
+}
+
+class GeminiAdapter implements Adapter {
+  readonly root: string;
+  readonly settingsPath: string;
+  readonly home: string;
+
+  constructor(home: string) {
+    this.home = home;
+    this.root = join(home, ".gemini", "skills");
+    this.settingsPath = join(home, ".gemini", "settings.json");
+  }
+
+  discover(): SkillInstance[] {
+    const settings = readJson(this.settingsPath);
+    const skills = readObject(settings.skills);
+    const globallyEnabled = skills.enabled !== false;
+    const disabled = new Set(readStringArray(skills.disabled));
+    return discoverSkillFiles(this.root).map((path) => {
+      const values = skillFrontmatter(path);
+      const name = values.name || basename(dirname(path));
+      return new SkillInstance(
+        "gemini-cli",
+        name,
+        path,
+        globallyEnabled && !disabled.has(name),
+        provenanceFromFrontmatter(values),
+      );
+    });
+  }
+
+  setEnabled(instance: SkillInstance, enabled: boolean): void {
+    const settings = readJson(this.settingsPath);
+    const skills = readObject(settings.skills);
+    if (enabled) {
+      skills.enabled = true;
+      skills.disabled = removeString(skills.disabled, instance.name);
+    } else {
+      skills.disabled = addString(skills.disabled, instance.name);
+    }
+    settings.skills = skills;
+    writeJson(this.settingsPath, settings);
+  }
+}
+
+type SkillPermissionValue = "allow" | "ask" | "deny";
+type SkillPermissions = SkillPermissionValue | Record<string, unknown>;
+
+function readSkillPermissions(config: Record<string, unknown>): SkillPermissions {
+  const permission = readObject(config.permission);
+  const skill = permission.skill;
+  if (skill === "allow" || skill === "ask" || skill === "deny") {
+    return skill;
+  }
+  return readObject(skill);
+}
+
+function skillPermissionFor(
+  permissions: SkillPermissions,
+  skillName: string,
+): SkillPermissionValue {
+  if (typeof permissions === "string") {
+    return permissions;
+  }
+
+  const exact = permissionValue(permissions[skillName]);
+  if (exact) {
+    return exact;
+  }
+
+  for (const [pattern, rawValue] of Object.entries(permissions)) {
+    if (globMatches(pattern, skillName)) {
+      const value = permissionValue(rawValue);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return "allow";
+}
+
+function permissionValue(value: unknown): SkillPermissionValue | null {
+  if (value === "allow" || value === "ask" || value === "deny") {
+    return value;
+  }
+  return null;
+}
+
+function globMatches(pattern: string, value: string): boolean {
+  const regexp = new RegExp(`^${escapeRegExp(pattern).replaceAll("\\*", ".*")}$`);
+  return regexp.test(value);
+}
+
 function readObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -528,6 +729,9 @@ export class SkillManager {
       codex: new CodexAdapter(resolvedHome),
       "claude-code": new ClaudeAdapter(resolvedHome),
       cursor: new CursorAdapter(resolvedHome),
+      "github-copilot": new CopilotAdapter(resolvedHome),
+      opencode: new OpenCodeAdapter(resolvedHome),
+      "gemini-cli": new GeminiAdapter(resolvedHome),
     };
   }
 
@@ -606,13 +810,22 @@ export class SkillManager {
   formatTable(rows = this.scan()): string {
     const nameWidth = Math.max("Skill".length, ...rows.map((row) => row.name.length));
     const lines = [
-      `${"Skill".padEnd(nameWidth)}  ${AGENT_LABELS.codex.padEnd(AGENT_COLUMN_WIDTHS.codex)}  ${AGENT_LABELS["claude-code"].padEnd(AGENT_COLUMN_WIDTHS["claude-code"])}  ${AGENT_LABELS.cursor.padEnd(AGENT_COLUMN_WIDTHS.cursor)}`,
-      `${"-".repeat(nameWidth)}  ${"-".repeat(AGENT_COLUMN_WIDTHS.codex)}  ${"-".repeat(AGENT_COLUMN_WIDTHS["claude-code"])}  ${"-".repeat(AGENT_COLUMN_WIDTHS.cursor)}`,
+      [
+        "Skill".padEnd(nameWidth),
+        ...AGENTS.map((agent) => AGENT_LABELS[agent].padEnd(AGENT_COLUMN_WIDTHS[agent])),
+      ].join("  "),
+      [
+        "-".repeat(nameWidth),
+        ...AGENTS.map((agent) => "-".repeat(AGENT_COLUMN_WIDTHS[agent])),
+      ].join("  "),
     ];
     for (const row of rows) {
       const values = AGENTS.map((agent) => formatStatus(row.status(agent)));
       lines.push(
-        `${row.name.padEnd(nameWidth)}  ${values[0].padEnd(AGENT_COLUMN_WIDTHS.codex)}  ${values[1].padEnd(AGENT_COLUMN_WIDTHS["claude-code"])}  ${values[2].padEnd(AGENT_COLUMN_WIDTHS.cursor)}`,
+        [
+          row.name.padEnd(nameWidth),
+          ...AGENTS.map((agent, index) => values[index].padEnd(AGENT_COLUMN_WIDTHS[agent])),
+        ].join("  "),
       );
     }
     return lines.join("\n");

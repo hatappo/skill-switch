@@ -140,6 +140,78 @@ test("applyState uses agent-specific storage", () => {
   assert.match(readFileSync(cursorSkill, "utf8"), /disable-model-invocation: true/);
 });
 
+test("Copilot adapter stores disabled skills in settings.json", () => {
+  const home = tmpHome();
+  const skill = join(home, ".copilot", "skills", "demo", "SKILL.md");
+  const settings = join(home, ".copilot", "settings.json");
+  writeSkill(skill, "demo");
+  ensureDir(dirname(settings));
+  writeFileSync(settings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
+
+  const manager = new SkillManager(home);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("github-copilot"),
+    "off",
+  );
+
+  assert.deepEqual(manager.applyState("demo", ["github-copilot"], true), ["github-copilot"]);
+  assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).disabledSkills, []);
+});
+
+test("OpenCode adapter stores skill permissions in opencode.json", () => {
+  const home = tmpHome();
+  const skill = join(home, ".config", "opencode", "skills", "demo", "SKILL.md");
+  const config = join(home, ".config", "opencode", "opencode.json");
+  writeSkill(skill, "demo");
+  ensureDir(dirname(config));
+  writeFileSync(config, JSON.stringify({ permission: { skill: { demo: "deny" } } }), "utf8");
+
+  const manager = new SkillManager(home);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("opencode"),
+    "off",
+  );
+
+  assert.deepEqual(manager.applyState("demo", ["opencode"], true), ["opencode"]);
+  assert.equal(JSON.parse(readFileSync(config, "utf8")).permission.skill.demo, "allow");
+});
+
+test("Gemini adapter stores disabled skills in nested settings", () => {
+  const home = tmpHome();
+  const skill = join(home, ".gemini", "skills", "demo", "SKILL.md");
+  const settings = join(home, ".gemini", "settings.json");
+  writeSkill(skill, "demo");
+  ensureDir(dirname(settings));
+  writeFileSync(
+    settings,
+    JSON.stringify({ skills: { enabled: false, disabled: ["demo"] } }),
+    "utf8",
+  );
+
+  const manager = new SkillManager(home);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("gemini-cli"),
+    "off",
+  );
+
+  assert.deepEqual(manager.applyState("demo", ["gemini-cli"], true), ["gemini-cli"]);
+  const enabledSettings = JSON.parse(readFileSync(settings, "utf8"));
+  assert.equal(enabledSettings.skills.enabled, true);
+  assert.deepEqual(enabledSettings.skills.disabled, []);
+
+  assert.deepEqual(manager.applyState("demo", ["gemini-cli"], false), ["gemini-cli"]);
+  assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).skills.disabled, ["demo"]);
+});
+
 test("buildInstallMissingCommands uses provenance from installed agents", () => {
   const home = tmpHome();
   writeSkill(

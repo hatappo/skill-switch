@@ -1,7 +1,7 @@
 {
   "name": "skill-switch",
   "version": "0.1.0",
-  "description": "TUI for switching user-level Agent Skills across Codex, Claude Code, and Cursor.",
+  "description": "TUI for switching user-level Agent Skills across multiple coding agents.",
   "bin": {
     "skill-switch": "./src/cli.ts"
   },

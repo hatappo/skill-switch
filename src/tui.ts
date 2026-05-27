@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import readline from "node:readline";
 import {
   AGENT_LABELS,
+  AGENT_COLUMN_WIDTHS,
   AGENTS,
   type AgentName,
   formatStatus,
@@ -122,7 +123,11 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
-    const nameWidth = Math.max(18, Math.min(42, width - 40));
+    const agentColumnsWidth = AGENTS.reduce(
+      (total, agent) => total + 2 + AGENT_COLUMN_WIDTHS[agent],
+      0,
+    );
+    const nameWidth = Math.max(12, Math.min(42, width - agentColumnsWidth));
     const visibleHeight = Math.max(0, height - 5);
     const top = Math.min(
       Math.max(0, this.rowIndex - visibleHeight + 1),
@@ -133,7 +138,10 @@ class SkillTui {
     this.writeLine("skill-switch | Space=cell | a=row toggle | o=row on | x=row off", width, true);
     this.writeLine("             | i=install missing | s=save | r=reload | q=quit", width);
     this.writeLine(
-      `${"Skill".padEnd(nameWidth)}  ${AGENT_LABELS.codex.padStart(6)}  ${AGENT_LABELS["claude-code"].padStart(11)}  ${AGENT_LABELS.cursor.padStart(6)}`,
+      [
+        "Skill".padEnd(nameWidth),
+        ...AGENTS.map((agent) => AGENT_LABELS[agent].padStart(AGENT_COLUMN_WIDTHS[agent])),
+      ].join("  "),
       width,
     );
 
@@ -148,7 +156,7 @@ class SkillTui {
       let line = selectedRow ? `${ANSI.reverse}${rowName}${ANSI.reset}` : rowName;
       for (const agent of AGENTS) {
         const selectedCell = selectedRow && agent === AGENTS[this.agentIndex];
-        line += `  ${this.renderStatusCell(row, agent, selectedCell, agent === "claude-code" ? 11 : 6)}`;
+        line += `  ${this.renderStatusCell(row, agent, selectedCell, AGENT_COLUMN_WIDTHS[agent])}`;
       }
       this.writeLine(line, width);
     }

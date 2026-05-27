@@ -4,19 +4,22 @@
 
 # skill-switch
 
-`skill-switch` is a dependency-free TypeScript TUI/CLI for viewing and toggling user-level Agent Skills across Codex, Claude Code, and Cursor.
+`skill-switch` is a dependency-free TypeScript TUI for viewing and toggling user-level Agent Skills across multiple coding agents.
 
 It matches skills by the `name` field in `SKILL.md` frontmatter, falling back to the parent directory name when `name` is missing.
 
 ## Supported agents
 
-Agent IDs follow the names in parentheses used by `gh skill install --help`, such as `codex`, `claude-code`, and `cursor`.
+Agent IDs follow the names in parentheses used by `gh skill install --help`.
 
-| Agent       | ID            | User skill folders                    | Toggle mechanism                                                                       |
-| ----------- | ------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
-| Codex       | `codex`       | `~/.agents/skills`, `~/.codex/skills` | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
-| Claude Code | `claude-code` | `~/.claude/skills`                    | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
-| Cursor      | `cursor`      | `~/.cursor/skills`                    | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
+| Agent              | ID               | User skill folders                                                  | Toggle mechanism                                                                       |
+| ------------------ | ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Codex              | `codex`          | `~/.agents/skills`, `~/.codex/skills`                               | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
+| Claude Code        | `claude-code`    | `~/.claude/skills`                                                  | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
+| Cursor             | `cursor`         | `~/.cursor/skills`                                                  | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
+| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`, `~/.agents/skills`                             | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
+| OpenCode           | `opencode`       | `~/.config/opencode/skills`, `~/.claude/skills`, `~/.agents/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
+| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`                                                  | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
 
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
@@ -39,11 +42,11 @@ pnpm start
 
 Run without arguments to open the TUI.
 
+Advanced helper commands are kept for inspection and dry-run install workflows:
+
 ```bash
 node src/cli.ts list
 node src/cli.ts list --format json
-node src/cli.ts set sample-skill all off
-node src/cli.ts set sample-skill codex claude-code on
 node src/cli.ts install-missing frontend-design
 node src/cli.ts install-missing frontend-design cursor --execute
 ```
@@ -82,23 +85,14 @@ Status colors:
 | `r`                     | Reload from disk and clear pending changes                        |
 | `q`                     | Quit                                                              |
 
-## Checks
-
-```bash
-pnpm verify
-pnpm format:check
-pnpm lint
-pnpm lint:fix
-pnpm typecheck
-pnpm test
-pnpm fix
-```
-
 ## References
 
 - Codex Agent Skills docs: https://developers.openai.com/codex/skills
 - Claude Code Skills docs: https://code.claude.com/docs/en/skills
 - Cursor Agent Skills forum guidance: https://forum.cursor.com/t/can-i-run-cursor-cli-without-loading-skills-or-with-only-specific-skill/152608
+- GitHub Copilot CLI docs: https://docs.github.com/copilot/reference/copilot-cli-reference/cli-command-reference
+- OpenCode Agent Skills docs: https://opencode.ai/docs/skills/
+- Gemini CLI configuration docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
 
 ### gh
 
