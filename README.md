@@ -55,6 +55,9 @@ node src/cli.ts install-missing frontend-design cursor --execute
 installed skill's `SKILL.md`, then builds `gh skill install --scope user --agent ...`
 commands for agents where that skill is missing. It prints commands by default;
 pass `--execute` to run them.
+When multiple installed agents have provenance for the same skill, the first
+match is used in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI,
+OpenCode, Gemini CLI.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.

@@ -55,6 +55,8 @@ node src/cli.ts install-missing frontend-design cursor --execute
 `metadata.github-repo` と `metadata.github-path` を読み取り、その skill が存在しない
 Agent 向けの `gh skill install --scope user --agent ...` コマンドを作ります。デフォルトでは
 コマンド表示だけを行い、`--execute` を付けた場合だけ実行します。
+複数 Agent に同じ skill の provenance がある場合は、Codex、Claude Code、Cursor、
+GitHub Copilot CLI、OpenCode、Gemini CLI の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
