@@ -18,6 +18,10 @@ type InstallPlan = {
   skill: string;
   commands: InstallCommand[];
 };
+type DeletePlan = {
+  skill: string;
+  targets: string[];
+};
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -42,6 +46,7 @@ class SkillTui {
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
   private installPlan: InstallPlan | null = null;
+  private deletePlan: DeletePlan | null = null;
   private message = "";
 
   constructor(manager: SkillManager) {
@@ -87,6 +92,9 @@ class SkillTui {
     if (this.installPlan) {
       return this.handleInstallConfirmation(key);
     }
+    if (this.deletePlan) {
+      return this.handleDeleteConfirmation(key);
+    }
     if (key.name === "q" || key.name === "escape") {
       if (this.pending.size > 0) {
         this.message = "Pending changes remain. Press s to save or r to discard.";
@@ -104,7 +112,7 @@ class SkillTui {
       this.agentIndex = Math.min(AGENTS.length - 1, this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
-    } else if (key.name === "a") {
+    } else if (key.name === "t") {
       this.toggleRow();
     } else if (key.name === "o") {
       this.setRow(true);
@@ -117,6 +125,8 @@ class SkillTui {
       this.reload();
     } else if (key.name === "i") {
       this.prepareInstallMissing();
+    } else if (key.name === "d") {
+      this.prepareDelete();
     }
     return false;
   }
@@ -136,8 +146,12 @@ class SkillTui {
     );
 
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
-    this.writeLine("skill-switch | Space=cell | a=row toggle | o=row on | x=row off", width, true);
-    this.writeLine("             | i=install missing | s=save | r=reload | q=quit", width, true);
+    this.writeLine("skwitch | Space=cell | t=toggle row | o=row on | x=row off", width, true);
+    this.writeLine(
+      "        | d=delete row | i=install missing | s=save | r=reload | q=quit",
+      width,
+      true,
+    );
     this.writeLine(
       [
         "Skill".padEnd(nameWidth),
@@ -163,7 +177,7 @@ class SkillTui {
     }
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
-    this.writeLine(footer, width);
+    this.writeLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
   }
 
   private writeLine(text: string, width: number, bold = false): void {
@@ -204,6 +218,22 @@ class SkillTui {
       this.message = `Cancelled install for ${plan.skill}.`;
     } else {
       this.message = "Install is ready. Press y to run gh skill install, or n to cancel.";
+    }
+    return false;
+  }
+
+  private handleDeleteConfirmation(key: readline.Key): boolean {
+    const plan = this.deletePlan;
+    if (!plan) {
+      return false;
+    }
+    if (key.name === "y") {
+      this.executeDeletePlan();
+    } else if (key.name === "n" || key.name === "escape") {
+      this.deletePlan = null;
+      this.message = `Cancelled delete for ${plan.skill}.`;
+    } else {
+      this.message = "Delete is ready. Press y to delete skill directories, or n to cancel.";
     }
     return false;
   }
@@ -337,6 +367,26 @@ class SkillTui {
     this.message = `Install ${row.name} for ${agents}? Press y to run gh, n to cancel.`;
   }
 
+  private prepareDelete(): void {
+    const row = this.currentRow();
+    if (!row) {
+      return;
+    }
+    if (this.pending.size > 0) {
+      this.message = "Save or reload pending changes before deleting skills.";
+      return;
+    }
+
+    const targets = this.manager.deleteTargets(row.name);
+    if (targets.length === 0) {
+      this.message = `No installed directories found for ${row.name}.`;
+      return;
+    }
+
+    this.deletePlan = { skill: row.name, targets };
+    this.message = `Delete ${row.name} from ${targets.length} directories? Press y to delete, n to cancel.`;
+  }
+
   private executeInstallPlan(): void {
     const plan = this.installPlan;
     if (!plan) {
@@ -370,6 +420,25 @@ class SkillTui {
     }
     this.reload();
     this.message = resultMessage || `Installed ${plan.skill} for ${installed} missing agents.`;
+  }
+
+  private executeDeletePlan(): void {
+    const plan = this.deletePlan;
+    if (!plan) {
+      return;
+    }
+    this.deletePlan = null;
+
+    let deleted: string[];
+    try {
+      deleted = this.manager.deleteSkill(plan.skill);
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error);
+      return;
+    }
+
+    this.reload();
+    this.message = `Deleted ${plan.skill} from ${deleted.length} directories.`;
   }
 
   private key(skill: string, agent: AgentName): PendingKey {

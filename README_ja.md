@@ -13,6 +13,7 @@ Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`na
 ## 特長
 
 - 対応 Agent の skill をひとつのテーブルで横断的に On/Off できます。
+- 選択中の skill を、存在する Agent 全体からまとめて削除できます。
 - skill ディレクトリの rename ではなく、各 Agent の native な有効/無効設定を使います。
 - provenance metadata がある場合、`gh skill install` で未導入 Agent へ skill を追加できます。
 - runtime package dependency はありません。
@@ -93,9 +94,10 @@ TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y
 | `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                   |
 | `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                   |
 | `Space`                 | toggle cell     | 選択中のセルだけ On/Off                          |
-| `a`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
+| `t`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
 | `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
 | `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
+| `d`                     | delete row      | 選択中の skill 行を、存在する Agent 全体で削除   |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
 | `s`                     | save            | 未保存変更を保存                                 |

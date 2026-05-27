@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -149,6 +149,61 @@ test("applyState uses agent-specific storage", () => {
   const claudeSettings = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
   assert.equal(claudeSettings.skillOverrides.demo, "off");
   assert.match(readFileSync(cursorSkill, "utf8"), /disable-model-invocation: true/);
+});
+
+test("deleteSkill removes skill directories and stale disable settings", () => {
+  const home = tmpHome();
+  const sharedSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const claudeSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  const geminiSkill = join(home, ".gemini", "skills", "demo", "SKILL.md");
+  const codexConfig = join(home, ".codex", "config.toml");
+  const claudeSettings = join(home, ".claude", "settings.json");
+  const copilotSettings = join(home, ".copilot", "settings.json");
+  const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
+  const geminiSettings = join(home, ".gemini", "settings.json");
+  writeSkill(sharedSkill, "demo");
+  writeSkill(claudeSkill, "demo");
+  writeSkill(geminiSkill, "demo");
+  setCodexSkillEnabled(codexConfig, sharedSkill, false);
+  ensureDir(dirname(claudeSettings));
+  writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "off" } }), "utf8");
+  ensureDir(dirname(copilotSettings));
+  writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
+  ensureDir(dirname(opencodeConfig));
+  writeFileSync(
+    opencodeConfig,
+    JSON.stringify({ permission: { skill: { demo: "deny" } } }),
+    "utf8",
+  );
+  ensureDir(dirname(geminiSettings));
+  writeFileSync(geminiSettings, JSON.stringify({ skills: { disabled: ["demo"] } }), "utf8");
+
+  const manager = new SkillManager(home);
+  assert.deepEqual(manager.deleteTargets("demo"), [
+    resolve(dirname(sharedSkill)),
+    resolve(dirname(claudeSkill)),
+    resolve(dirname(geminiSkill)),
+  ]);
+
+  const deleted = manager.deleteSkill("demo");
+
+  assert.deepEqual(deleted, [
+    resolve(dirname(sharedSkill)),
+    resolve(dirname(claudeSkill)),
+    resolve(dirname(geminiSkill)),
+  ]);
+  assert.equal(existsSync(dirname(sharedSkill)), false);
+  assert.equal(existsSync(dirname(claudeSkill)), false);
+  assert.equal(existsSync(dirname(geminiSkill)), false);
+  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(sharedSkill)), false);
+  assert.deepEqual(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides, {});
+  assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, []);
+  assert.deepEqual(JSON.parse(readFileSync(opencodeConfig, "utf8")).permission.skill, {});
+  assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, []);
+  assert.equal(
+    manager.scan().some((row) => row.name === "demo"),
+    false,
+  );
 });
 
 test("Copilot adapter stores disabled skills in settings.json", () => {

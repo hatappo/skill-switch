@@ -13,6 +13,7 @@ It matches skills by the `name` field in `SKILL.md` frontmatter, falling back to
 ## Features
 
 - Toggle skills across supported agents from one table.
+- Delete installed skill directories across agents from one row.
 - Uses each agent's native enable/disable settings instead of renaming skill directories.
 - Can install missing skills through `gh skill install` when provenance metadata is available.
 - Has no runtime package dependencies.
@@ -92,9 +93,10 @@ Status colors:
 | `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |
 | `Left`/`Right`, `h`/`l` | move column     | Move between agent columns                                        |
 | `Space`                 | toggle cell     | Toggle the selected skill for the selected agent                  |
-| `a`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
+| `t`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
 | `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
 | `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
+| `d`                     | delete row      | Delete the selected skill row across all agents where it exists   |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
 | `s`                     | save            | Save pending changes                                              |

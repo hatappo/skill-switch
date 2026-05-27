@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -455,6 +456,42 @@ export function setCodexSkillEnabled(
   writeFileSync(configPath, result.join(""), "utf8");
 }
 
+export function removeCodexSkillConfig(configPath: string, skillPath: string): void {
+  if (!existsSync(configPath)) {
+    return;
+  }
+  const target = resolve(skillPath);
+  const lines = readFileSync(configPath, "utf8").split(/(?<=\n)/);
+  const result: string[] = [];
+  let found = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].trim() !== "[[skills.config]]") {
+      result.push(lines[index]);
+      continue;
+    }
+
+    const block = [lines[index]];
+    index += 1;
+    while (index < lines.length && !lines[index].trimStart().startsWith("[")) {
+      block.push(lines[index]);
+      index += 1;
+    }
+    index -= 1;
+
+    const blockPath = parseTomlString(block, "path");
+    if (blockPath && resolve(blockPath) === target) {
+      found = true;
+    } else {
+      result.push(...block);
+    }
+  }
+
+  if (found) {
+    writeFileSync(configPath, result.join(""), "utf8");
+  }
+}
+
 function codexSkillBlock(path: string, enabled: boolean): string[] {
   return [
     "[[skills.config]]\n",
@@ -466,6 +503,7 @@ function codexSkillBlock(path: string, enabled: boolean): string[] {
 type Adapter = {
   discover(): SkillInstance[];
   setEnabled(instance: SkillInstance, enabled: boolean): void;
+  remove?(instance: SkillInstance): void;
 };
 
 class CodexAdapter implements Adapter {
@@ -498,6 +536,10 @@ class CodexAdapter implements Adapter {
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
     setCodexSkillEnabled(this.configPath, instance.path, enabled);
+  }
+
+  remove(instance: SkillInstance): void {
+    removeCodexSkillConfig(this.configPath, instance.path);
   }
 }
 
@@ -534,6 +576,20 @@ class ClaudeAdapter implements Adapter {
     (settings.skillOverrides as Record<string, unknown>)[instance.name] = enabled ? "on" : "off";
     writeJson(this.settingsPath, settings);
   }
+
+  remove(instance: SkillInstance): void {
+    if (!existsSync(this.settingsPath)) {
+      return;
+    }
+    const settings = readJson(this.settingsPath);
+    const overrides = readObject(settings.skillOverrides);
+    if (!(instance.name in overrides)) {
+      return;
+    }
+    delete overrides[instance.name];
+    settings.skillOverrides = overrides;
+    writeJson(this.settingsPath, settings);
+  }
 }
 
 class CursorAdapter implements Adapter {
@@ -562,6 +618,8 @@ class CursorAdapter implements Adapter {
   setEnabled(instance: SkillInstance, enabled: boolean): void {
     updateFrontmatterKey(instance.path, "disable-model-invocation", !enabled);
   }
+
+  remove(_instance: SkillInstance): void {}
 }
 
 class CopilotAdapter implements Adapter {
@@ -598,6 +656,18 @@ class CopilotAdapter implements Adapter {
     settings.disabledSkills = enabled
       ? removeString(settings.disabledSkills, instance.name)
       : addString(settings.disabledSkills, instance.name);
+    writeJson(this.settingsPath, settings);
+  }
+
+  remove(instance: SkillInstance): void {
+    if (!existsSync(this.settingsPath)) {
+      return;
+    }
+    const settings = readJson(this.settingsPath);
+    if (!readStringArray(settings.disabledSkills).includes(instance.name)) {
+      return;
+    }
+    settings.disabledSkills = removeString(settings.disabledSkills, instance.name);
     writeJson(this.settingsPath, settings);
   }
 }
@@ -644,6 +714,22 @@ class OpenCodeAdapter implements Adapter {
     config.permission = permission;
     writeJson(this.configPath, config);
   }
+
+  remove(instance: SkillInstance): void {
+    if (!existsSync(this.configPath)) {
+      return;
+    }
+    const config = readJson(this.configPath);
+    const permission = readObject(config.permission);
+    const skill = readObject(permission.skill);
+    if (!(instance.name in skill)) {
+      return;
+    }
+    delete skill[instance.name];
+    permission.skill = skill;
+    config.permission = permission;
+    writeJson(this.configPath, config);
+  }
 }
 
 class GeminiAdapter implements Adapter {
@@ -684,6 +770,20 @@ class GeminiAdapter implements Adapter {
     } else {
       skills.disabled = addString(skills.disabled, instance.name);
     }
+    settings.skills = skills;
+    writeJson(this.settingsPath, settings);
+  }
+
+  remove(instance: SkillInstance): void {
+    if (!existsSync(this.settingsPath)) {
+      return;
+    }
+    const settings = readJson(this.settingsPath);
+    const skills = readObject(settings.skills);
+    if (!readStringArray(skills.disabled).includes(instance.name)) {
+      return;
+    }
+    skills.disabled = removeString(skills.disabled, instance.name);
     settings.skills = skills;
     writeJson(this.settingsPath, settings);
   }
@@ -793,6 +893,30 @@ export class SkillManager {
     return changed;
   }
 
+  deleteTargets(skillName: string): string[] {
+    const row = this.scan().find((item) => item.name === skillName);
+    return row ? uniqueSkillDirectories(row) : [];
+  }
+
+  deleteSkill(skillName: string): string[] {
+    const row = this.scan().find((item) => item.name === skillName);
+    if (!row) {
+      return [];
+    }
+
+    for (const agent of AGENTS) {
+      for (const instance of row.instances[agent]) {
+        this.adapters[agent].remove?.(instance);
+      }
+    }
+
+    const targets = uniqueSkillDirectories(row);
+    for (const target of targets) {
+      rmSync(target, { recursive: true, force: true });
+    }
+    return targets;
+  }
+
   buildInstallMissingCommands(
     skillName: string,
     agents: AgentName[] = [...AGENTS],
@@ -856,6 +980,21 @@ export class SkillManager {
     }
     return lines.join("\n");
   }
+}
+
+function uniqueSkillDirectories(row: SkillRow): string[] {
+  const seen = new Set<string>();
+  const targets: string[] = [];
+  for (const agent of AGENTS) {
+    for (const instance of row.instances[agent]) {
+      const target = resolve(dirname(instance.path));
+      if (!seen.has(target)) {
+        seen.add(target);
+        targets.push(target);
+      }
+    }
+  }
+  return targets;
 }
 
 function shellQuote(value: string): string {
