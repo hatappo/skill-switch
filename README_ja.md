@@ -75,10 +75,13 @@ node src/cli.ts set sample-skill codex claude-code on
 ## チェック
 
 ```bash
-pnpm check
-pnpm lint
+pnpm verify
 pnpm format:check
-pnpm format
+pnpm lint
+pnpm lint:fix
+pnpm typecheck
+pnpm test
+pnpm fix
 ```
 
 ## 参考

@@ -120,7 +120,8 @@ function readDirectory(path: string): Dirent[] {
 
 export function parseFrontmatter(text: string): Frontmatter {
   const lines = text.split(/\r?\n/);
-  if (lines.length === 0 || lines[0].trim() !== "---") {
+  const firstLine = lines[0];
+  if (firstLine === undefined || firstLine.trim() !== "---") {
     return { values: {}, bounds: null };
   }
 
@@ -172,7 +173,8 @@ export function updateFrontmatterKey(path: string, key: string, value: boolean):
   const lines = text.match(/^.*(?:\r?\n|$)/gm) ?? [];
   const boolText = value ? "true" : "false";
 
-  if (lines.length === 0 || lines[0].trim() !== "---") {
+  const firstLine = lines[0];
+  if (firstLine === undefined || firstLine.trim() !== "---") {
     const name = basename(dirname(path));
     writeFileSync(path, `---\nname: ${name}\n${key}: ${boolText}\n---\n\n${text}`, "utf8");
     return;

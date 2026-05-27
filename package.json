@@ -9,13 +9,18 @@
   "scripts": {
     "start": "node src/cli.ts",
     "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
+    "typecheck": "tsgo --noEmit",
     "syntax": "node --check src/cli.ts && node --check src/core.ts && node --check src/tui.ts && node --check tests/core.test.ts",
     "test": "node --test tests/*.test.ts",
-    "check": "pnpm lint && pnpm format:check && pnpm syntax && pnpm test"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm syntax && pnpm test",
+    "fix": "pnpm format && pnpm lint:fix && pnpm typecheck && pnpm syntax && pnpm test"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@typescript/native-preview": "7.0.0-dev.20260526.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.67.0"
   },

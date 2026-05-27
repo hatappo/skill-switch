@@ -73,10 +73,13 @@ Status colors:
 ## Checks
 
 ```bash
-pnpm check
-pnpm lint
+pnpm verify
 pnpm format:check
-pnpm format
+pnpm lint
+pnpm lint:fix
+pnpm typecheck
+pnpm test
+pnpm fix
 ```
 
 ## References
