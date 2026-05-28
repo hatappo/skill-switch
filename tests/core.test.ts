@@ -11,6 +11,7 @@ import {
   parseFrontmatter,
   provenanceFromFrontmatter,
   readCodexSkillEnabled,
+  sanitizeSkillFrontmatter,
   setCodexSkillEnabled,
   SkillManager,
   updateFrontmatterKey,
@@ -71,6 +72,44 @@ test("updateFrontmatterKey replaces existing key", () => {
   const text = readFileSync(skill, "utf8");
   assert.match(text, /disable-model-invocation: true/);
   assert.doesNotMatch(text, /disable-model-invocation: false/);
+});
+
+test("sanitizeSkillFrontmatter keeps only portable top-level keys", () => {
+  const home = tmpHome();
+  const skill = join(home, "skill", "SKILL.md");
+  ensureDir(dirname(skill));
+  writeFileSync(
+    skill,
+    [
+      "---",
+      "name: skill",
+      "description: Test skill",
+      "metadata:",
+      "  github-repo: example/skills",
+      "  github-path: skills/skill",
+      "allowed-tools: Bash(git:*) Read",
+      "disable-model-invocation: true",
+      "  stale-child: true",
+      "x-agent-private:",
+      "  enabled: false",
+      "compatibility: Requires git",
+      "---",
+      "",
+      "# skill",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  assert.equal(sanitizeSkillFrontmatter(skill), true);
+
+  const text = readFileSync(skill, "utf8");
+  assert.match(text, /metadata:\n  github-repo: example\/skills\n  github-path: skills\/skill/);
+  assert.match(text, /allowed-tools: Bash\(git:\*\) Read/);
+  assert.match(text, /compatibility: Requires git/);
+  assert.doesNotMatch(text, /disable-model-invocation/);
+  assert.doesNotMatch(text, /stale-child/);
+  assert.doesNotMatch(text, /x-agent-private/);
 });
 
 test("discoverSkillFiles ignores hidden directories", () => {
@@ -300,5 +339,48 @@ test("buildInstallMissingCommands uses provenance from installed agents", () => 
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "codex"],
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "cursor"],
     ],
+  );
+});
+
+test("install-missing falls back to local copy without provenance", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  const copilotSettings = join(home, ".copilot", "settings.json");
+  writeSkill(
+    sourceSkill,
+    "demo",
+    "allowed-tools: Bash(git:*) Read\ncompatibility: Requires git\ndisable-model-invocation: true\n",
+  );
+  ensureDir(dirname(copilotSettings));
+  writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
+
+  const manager = new SkillManager(home);
+  const actions = manager.buildInstallMissingActions("demo", ["github-copilot"]);
+
+  assert.deepEqual(actions, [
+    {
+      kind: "copy",
+      agent: "github-copilot",
+      skillName: "demo",
+      sourcePath: resolve(dirname(sourceSkill)),
+      targetPath: join(home, ".copilot", "skills", "demo"),
+      command: `copy ${resolve(dirname(sourceSkill))} -> ${join(home, ".copilot", "skills", "demo")}`,
+    },
+  ]);
+
+  manager.executeInstallAction(actions[0]);
+
+  const copiedSkill = join(home, ".copilot", "skills", "demo", "SKILL.md");
+  assert.equal(existsSync(copiedSkill), true);
+  assert.match(readFileSync(copiedSkill, "utf8"), /allowed-tools: Bash\(git:\*\) Read/);
+  assert.match(readFileSync(copiedSkill, "utf8"), /compatibility: Requires git/);
+  assert.doesNotMatch(readFileSync(copiedSkill, "utf8"), /disable-model-invocation/);
+  assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, []);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("github-copilot"),
+    "on",
   );
 });

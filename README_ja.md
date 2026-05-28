@@ -6,16 +6,13 @@
 
 `skwitch` は、複数の Agent Skill の有効/無効をエージェント横断でまとめて切り替える TUI です。
 
-Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`name` がない場合は親ディレクトリ名を使います。
-
 ![skwitch TUI screenshot](./docs/screenshot-tui.png)
 
 ## 特長
 
-- 対応 Agent の skill をひとつのテーブルで横断的に On/Off できます。
-- 選択中の skill を、存在する Agent 全体からまとめて削除できます。
-- skill ディレクトリの rename ではなく、各 Agent の native な有効/無効設定を使います。
-- provenance metadata がある場合、`gh skill install` で未導入 Agent へ skill を追加できます。
+- 各 Agent の user level skill をひとつのテーブルで横断的に On/Off、インストール、削除できます。
+- On/Off の切り替えは skill ディレクトリの rename ではなく、各 Agent の native な有効/無効設定を更新します。
+- インストールは `gh skill install` コマンドと連携し、provenance metadata がない場合は local copy に fallback します。
 - runtime package dependency はありません。
 
 ## 対応 Agent
@@ -34,6 +31,8 @@ Agent ID は `gh skill install --help` の括弧内の名称に合わせてい�
 Cursor は Codex のような path ベースの一括 On/Off 設定を公開していないため、このツールでは `disable-model-invocation` を使います。これは自動呼び出しを止める設定で、明示呼び出しの扱いは Cursor 側の仕様に従います。
 
 `~/.cursor/skills-cursor` は Cursor が管理するディレクトリなので、このツールでは対象外です。
+
+Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`name` がない場合は親ディレクトリ名を使います。
 
 ## 使い方
 
@@ -67,13 +66,17 @@ node src/cli.ts install-missing frontend-design cursor --execute
 `metadata.github-repo` と `metadata.github-path` を読み取り、その skill が存在しない
 Agent 向けの `gh skill install --scope user --agent ...` コマンドを作ります。デフォルトでは
 コマンド表示だけを行い、`--execute` を付けた場合だけ実行します。
-複数 Agent に同じ skill の provenance がある場合は、Codex、Claude Code、Cursor、
+GitHub provenance がない場合は、既存の local skill directory を missing Agent の primary
+user skill folder へコピーします。
+local copy 時は `SKILL.md` frontmatter を sanitize し、Agent Skills spec の field である
+`name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` だけを残します。
+複数 Agent をインストール元として使える場合は、Codex、Claude Code、Cursor、
 GitHub Copilot CLI、OpenCode、Gemini CLI の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
-実際のインストールには `gh skill install` が必要です。dry-run の `install-missing` は
-`gh` がなくてもコマンド表示だけ行えます。
+GitHub provenance を使う経路では `gh skill install` が必要です。local copy fallback では
+`gh` は不要です。
 
 ## TUI
 

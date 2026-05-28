@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   type Dirent,
   existsSync,
   mkdirSync,
@@ -36,6 +37,14 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   opencode: 8,
   "gemini-cli": 10,
 };
+export const AGENT_PRIMARY_SKILL_ROOTS: Record<AgentName, string[]> = {
+  codex: [".agents", "skills"],
+  "claude-code": [".claude", "skills"],
+  cursor: [".cursor", "skills"],
+  "github-copilot": [".copilot", "skills"],
+  opencode: [".config", "opencode", "skills"],
+  "gemini-cli": [".gemini", "skills"],
+};
 export const GH_MISSING_MESSAGE =
   "gh command not found. Install GitHub CLI and the gh skill extension first.";
 export const GH_SKILL_MISSING_MESSAGE =
@@ -46,6 +55,15 @@ export type Frontmatter = {
   bounds: [number, number] | null;
 };
 
+const PORTABLE_SKILL_FRONTMATTER_KEYS = new Set([
+  "name",
+  "description",
+  "license",
+  "compatibility",
+  "metadata",
+  "allowed-tools",
+]);
+
 export type SkillProvenance = {
   repository: string;
   skillPath: string;
@@ -53,10 +71,22 @@ export type SkillProvenance = {
 };
 
 export type InstallCommand = {
+  kind: "gh";
   agent: AgentName;
   args: string[];
   command: string;
 };
+
+export type CopyInstallAction = {
+  kind: "copy";
+  agent: AgentName;
+  skillName: string;
+  sourcePath: string;
+  targetPath: string;
+  command: string;
+};
+
+export type InstallAction = InstallCommand | CopyInstallAction;
 
 export function checkGhCommand(command = "gh"): string | null {
   const result = spawnSync(command, ["--version"], { stdio: "ignore" });
@@ -310,6 +340,54 @@ export function updateFrontmatterKey(path: string, key: string, value: boolean):
 
   lines.splice(endIndex, 0, `${key}: ${boolText}\n`);
   writeFileSync(path, lines.join(""), "utf8");
+}
+
+export function sanitizeSkillFrontmatter(path: string): boolean {
+  const text = readFileSync(path, "utf8");
+  const lines = text.match(/^.*(?:\r?\n|$)/gm) ?? [];
+  const firstLine = lines[0];
+  if (firstLine === undefined || firstLine.trim() !== "---") {
+    return false;
+  }
+
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (endIndex < 0) {
+    throw new Error(`frontmatter is not closed: ${path}`);
+  }
+
+  const filtered = filterPortableFrontmatterLines(lines.slice(1, endIndex));
+  const nextText = [lines[0], ...filtered, ...lines.slice(endIndex)].join("");
+  if (nextText === text) {
+    return false;
+  }
+
+  writeFileSync(path, nextText, "utf8");
+  return true;
+}
+
+function filterPortableFrontmatterLines(lines: string[]): string[] {
+  const result: string[] = [];
+  let keepCurrentBlock = true;
+
+  for (const line of lines) {
+    const key = topLevelYamlKey(line);
+    if (key !== null) {
+      keepCurrentBlock = PORTABLE_SKILL_FRONTMATTER_KEYS.has(key);
+    }
+    if (keepCurrentBlock) {
+      result.push(line);
+    }
+  }
+
+  return result;
+}
+
+function topLevelYamlKey(line: string): string | null {
+  if (/^\s/.test(line)) {
+    return null;
+  }
+  const match = line.match(/^([A-Za-z0-9_-]+)\s*:/);
+  return match?.[1] ?? null;
 }
 
 function escapeRegExp(value: string): string {
@@ -921,21 +999,32 @@ export class SkillManager {
     skillName: string,
     agents: AgentName[] = [...AGENTS],
   ): InstallCommand[] {
+    const actions = this.buildInstallMissingActions(skillName, agents);
+    if (actions.some((action) => action.kind === "copy")) {
+      throw new Error(`No GitHub provenance metadata found for ${JSON.stringify(skillName)}.`);
+    }
+    return actions.filter((action): action is InstallCommand => action.kind === "gh");
+  }
+
+  buildInstallMissingActions(
+    skillName: string,
+    agents: AgentName[] = [...AGENTS],
+  ): InstallAction[] {
     const row = this.scan().find((item) => item.name === skillName);
     if (!row) {
       throw new Error(`No installed skill named ${JSON.stringify(skillName)}.`);
     }
 
+    const missingAgents = agents.filter((agent) => row.instances[agent].length === 0);
+    if (missingAgents.length === 0) {
+      return [];
+    }
+
     const source = AGENTS.flatMap((agent) => row.instances[agent]).find(
       (instance) => instance.provenance !== null,
     )?.provenance;
-    if (!source) {
-      throw new Error(`No GitHub provenance metadata found for ${JSON.stringify(skillName)}.`);
-    }
-
-    return agents
-      .filter((agent) => row.instances[agent].length === 0)
-      .map((agent) => {
+    if (source) {
+      return missingAgents.map((agent) => {
         const args = [
           "skill",
           "install",
@@ -950,11 +1039,62 @@ export class SkillManager {
           args.push("--pin", source.pin);
         }
         return {
+          kind: "gh",
           agent,
           args,
           command: ["gh", ...args].map(shellQuote).join(" "),
         };
       });
+    }
+
+    const copySource = AGENTS.flatMap((agent) => row.instances[agent])[0];
+    if (!copySource) {
+      throw new Error(`No installed skill named ${JSON.stringify(skillName)}.`);
+    }
+
+    const sourceDirectory = resolve(dirname(copySource.path));
+    const directoryName = basename(sourceDirectory);
+    return missingAgents.map((agent) => {
+      const targetPath = join(this.home, ...AGENT_PRIMARY_SKILL_ROOTS[agent], directoryName);
+      return {
+        kind: "copy",
+        agent,
+        skillName,
+        sourcePath: sourceDirectory,
+        targetPath,
+        command: `copy ${sourceDirectory} -> ${targetPath}`,
+      };
+    });
+  }
+
+  executeInstallAction(action: InstallAction): void {
+    if (action.kind === "gh") {
+      const result = spawnSync("gh", action.args, { stdio: "inherit" });
+      if (result.error) {
+        throw result.error;
+      }
+      if (result.status !== 0) {
+        throw new Error(`gh skill install failed with exit ${result.status ?? 1}`);
+      }
+      return;
+    }
+
+    if (existsSync(action.targetPath)) {
+      throw new Error(`target skill directory already exists: ${action.targetPath}`);
+    }
+    mkdirSync(dirname(action.targetPath), { recursive: true });
+    cpSync(action.sourcePath, action.targetPath, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+
+    const copiedSkillPath = join(action.targetPath, "SKILL.md");
+    sanitizeSkillFrontmatter(copiedSkillPath);
+
+    this.adapters[action.agent].remove?.(
+      new SkillInstance(action.agent, action.skillName, copiedSkillPath, true, null),
+    );
   }
 
   formatTable(rows = this.scan()): string {

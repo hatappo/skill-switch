@@ -6,16 +6,13 @@
 
 `skwitch` is a TUI for switching AI agent skills across agents.
 
-It matches skills by the `name` field in `SKILL.md` frontmatter, falling back to the parent directory name when `name` is missing.
-
 ![skwitch TUI screenshot](./docs/screenshot-tui.png)
 
 ## Features
 
-- Toggle skills across supported agents from one table.
-- Delete installed skill directories across agents from one row.
-- Uses each agent's native enable/disable settings instead of renaming skill directories.
-- Can install missing skills through `gh skill install` when provenance metadata is available.
+- Toggle, install, and delete user-level skills across agents from one table.
+- Toggle state is stored through each agent's native enable/disable settings instead of renaming skill directories.
+- Install integrates with `gh skill install`, and falls back to local copy when provenance metadata is unavailable.
 - Has no runtime package dependencies.
 
 ## Supported agents
@@ -34,6 +31,8 @@ Agent IDs follow the names in parentheses used by `gh skill install --help`.
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
 Cursor's `~/.cursor/skills-cursor` directory is managed by Cursor itself and is intentionally ignored.
+
+Skill matching uses the `name` field in `SKILL.md` frontmatter, falling back to the parent directory name when `name` is missing.
 
 ## Usage
 
@@ -67,14 +66,19 @@ node src/cli.ts install-missing frontend-design cursor --execute
 installed skill's `SKILL.md`, then builds `gh skill install --scope user --agent ...`
 commands for agents where that skill is missing. It prints commands by default;
 pass `--execute` to run them.
-When multiple installed agents have provenance for the same skill, the first
-match is used in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI,
-OpenCode, Gemini CLI.
+When no GitHub provenance is available, it falls back to copying an installed
+local skill directory to the missing agents' primary user skill folders.
+During local copy, `SKILL.md` frontmatter is sanitized to keep only Agent Skills
+spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
+`allowed-tools`.
+When multiple installed agents can be used as a source, the first match is used
+in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI, OpenCode, Gemini
+CLI.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.
-The actual install path requires `gh skill install` to be available; dry-run
-`install-missing` can still print commands without `gh`.
+The GitHub provenance path requires `gh skill install` to be available. The
+local copy fallback does not require `gh`.
 
 TUI keys:
 

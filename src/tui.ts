@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import readline from "node:readline";
 import {
   AGENT_LABELS,
@@ -7,7 +6,7 @@ import {
   type AgentName,
   checkGhCommand,
   formatStatus,
-  type InstallCommand,
+  type InstallAction,
   SkillManager,
   type SkillRow,
 } from "./core.ts";
@@ -16,7 +15,7 @@ type PendingKey = `${string}\0${AgentName}`;
 type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
 type InstallPlan = {
   skill: string;
-  commands: InstallCommand[];
+  actions: InstallAction[];
 };
 type DeletePlan = {
   skill: string;
@@ -343,28 +342,29 @@ class SkillTui {
       return;
     }
 
-    const ghError = checkGhCommand();
-    if (ghError) {
-      this.message = ghError;
-      return;
-    }
-
-    let commands: InstallCommand[];
+    let actions: InstallAction[];
     try {
-      commands = this.manager.buildInstallMissingCommands(row.name);
+      actions = this.manager.buildInstallMissingActions(row.name);
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error);
       return;
     }
 
-    if (commands.length === 0) {
+    if (actions.length === 0) {
       this.message = `${row.name} is already installed for all supported agents.`;
       return;
     }
 
-    this.installPlan = { skill: row.name, commands };
-    const agents = commands.map((command) => AGENT_LABELS[command.agent]).join(", ");
-    this.message = `Install ${row.name} for ${agents}? Press y to run gh, n to cancel.`;
+    const ghError = actions.some((action) => action.kind === "gh") ? checkGhCommand() : null;
+    if (ghError) {
+      this.message = ghError;
+      return;
+    }
+
+    this.installPlan = { skill: row.name, actions };
+    const agents = actions.map((action) => AGENT_LABELS[action.agent]).join(", ");
+    const method = actions[0]?.kind === "copy" ? "copy locally" : "run gh";
+    this.message = `Install ${row.name} for ${agents}? Press y to ${method}, n to cancel.`;
   }
 
   private prepareDelete(): void {
@@ -401,15 +401,12 @@ class SkillTui {
 
     let installed = 0;
     let resultMessage = "";
-    for (const command of plan.commands) {
-      console.log(`$ ${command.command}`);
-      const result = spawnSync("gh", command.args, { stdio: "inherit" });
-      if (result.error) {
-        resultMessage = `Failed to run gh: ${result.error.message}`;
-        break;
-      }
-      if (result.status !== 0) {
-        resultMessage = `Install failed for ${AGENT_LABELS[command.agent]} with exit ${result.status ?? 1}.`;
+    for (const action of plan.actions) {
+      console.log(`$ ${action.command}`);
+      try {
+        this.manager.executeInstallAction(action);
+      } catch (error) {
+        resultMessage = `Install failed for ${AGENT_LABELS[action.agent]}: ${error instanceof Error ? error.message : String(error)}`;
         break;
       }
       installed += 1;

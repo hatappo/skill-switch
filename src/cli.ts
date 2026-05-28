@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -138,20 +137,20 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 2;
     }
 
-    let commands;
+    let actions;
     try {
-      commands = manager.buildInstallMissingCommands(skill, agents);
+      actions = manager.buildInstallMissingActions(skill, agents);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       return 1;
     }
 
-    if (commands.length === 0) {
+    if (actions.length === 0) {
       console.log(`No missing agents for ${skill}.`);
       return 0;
     }
 
-    if (execute) {
+    if (execute && actions.some((action) => action.kind === "gh")) {
       const ghError = checkGhCommand();
       if (ghError) {
         console.error(ghError);
@@ -159,12 +158,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       }
     }
 
-    for (const command of commands) {
-      console.log(command.command);
+    for (const action of actions) {
+      console.log(action.command);
       if (execute) {
-        const result = spawnSync("gh", command.args, { stdio: "inherit" });
-        if (result.status !== 0) {
-          return result.status ?? 1;
+        try {
+          manager.executeInstallAction(action);
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          return 1;
         }
       }
     }
