@@ -6,7 +6,7 @@
 
 `skwitch` は、複数の Agent Skill の有効/無効をエージェント横断でまとめて切り替える TUI です。
 
-![skwitch TUI screenshot](./docs/screenshot-tui.png)
+![skwitch TUI screenshot](./docs/img/screenshot-tui.png)
 
 ## 特長
 

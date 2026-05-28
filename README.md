@@ -6,7 +6,7 @@
 
 `skwitch` is a TUI for switching AI agent skills across agents.
 
-![skwitch TUI screenshot](./docs/screenshot-tui.png)
+![skwitch TUI screenshot](./docs/img/screenshot-tui.png)
 
 ## Features
 
