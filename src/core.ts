@@ -88,6 +88,80 @@ export type CopyInstallAction = {
 
 export type InstallAction = InstallCommand | CopyInstallAction;
 
+export type SnapshotStatus = "on" | "off";
+export type SkillSnapshot = {
+  version: 1;
+  skills: Record<string, Partial<Record<AgentName, SnapshotStatus>>>;
+};
+export type SnapshotChange = {
+  skill: string;
+  agent: AgentName;
+  enabled: boolean;
+};
+export type SnapshotSkip = {
+  skill: string;
+  agent?: AgentName;
+  reason: string;
+};
+export type SnapshotPlan = {
+  changes: SnapshotChange[];
+  unchanged: SnapshotChange[];
+  skipped: SnapshotSkip[];
+};
+
+export function parseSnapshot(text: string, source = "snapshot"): SkillSnapshot {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `${source} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (!isRecord(raw)) {
+    throw new Error(`${source} must be a JSON object`);
+  }
+  if (raw.version !== 1) {
+    throw new Error(`${source} version must be 1`);
+  }
+  if (!isRecord(raw.skills)) {
+    throw new Error(`${source}.skills must be an object`);
+  }
+
+  const skills: SkillSnapshot["skills"] = {};
+  for (const [skill, rawAgents] of Object.entries(raw.skills)) {
+    if (!skill) {
+      throw new Error(`${source}.skills contains an empty skill name`);
+    }
+    if (!isRecord(rawAgents)) {
+      throw new Error(`${source}.skills.${skill} must be an object`);
+    }
+
+    const agents: Partial<Record<AgentName, SnapshotStatus>> = {};
+    for (const [agent, rawStatus] of Object.entries(rawAgents)) {
+      if (!AGENTS.includes(agent as AgentName)) {
+        throw new Error(`${source}.skills.${skill} has unsupported agent: ${agent}`);
+      }
+      if (rawStatus !== "on" && rawStatus !== "off") {
+        throw new Error(`${source}.skills.${skill}.${agent} must be "on" or "off"`);
+      }
+      agents[agent as AgentName] = rawStatus;
+    }
+    skills[skill] = agents;
+  }
+
+  return { version: 1, skills };
+}
+
+export function formatSnapshot(snapshot: SkillSnapshot): string {
+  return `${JSON.stringify(snapshot, null, 2)}\n`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function checkGhCommand(command = "gh"): string | null {
   const result = spawnSync(command, ["--version"], { stdio: "ignore" });
   if (result.error) {
@@ -949,6 +1023,64 @@ export class SkillManager {
       }
     }
     return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  createSnapshot(rows = this.scan()): SkillSnapshot {
+    const skills: SkillSnapshot["skills"] = {};
+    for (const row of rows) {
+      const agents: Partial<Record<AgentName, SnapshotStatus>> = {};
+      for (const agent of AGENTS) {
+        const status = row.status(agent);
+        if (status === "on" || status === "off") {
+          agents[agent] = status;
+        }
+      }
+      if (Object.keys(agents).length > 0) {
+        skills[row.name] = agents;
+      }
+    }
+    return { version: 1, skills };
+  }
+
+  planSnapshot(snapshot: SkillSnapshot): SnapshotPlan {
+    const rows = new Map(this.scan().map((row) => [row.name, row]));
+    const changes: SnapshotChange[] = [];
+    const unchanged: SnapshotChange[] = [];
+    const skipped: SnapshotSkip[] = [];
+
+    for (const [skill, agents] of Object.entries(snapshot.skills)) {
+      const row = rows.get(skill);
+      for (const [agent, status] of Object.entries(agents) as [AgentName, SnapshotStatus][]) {
+        if (!row) {
+          skipped.push({ skill, agent, reason: "skill is not installed" });
+          continue;
+        }
+
+        const current = row.status(agent);
+        if (current === "-") {
+          skipped.push({ skill, agent, reason: "skill is not installed for agent" });
+          continue;
+        }
+
+        const enabled = status === "on";
+        const change = { skill, agent, enabled };
+        if (current === status) {
+          unchanged.push(change);
+        } else {
+          changes.push(change);
+        }
+      }
+    }
+
+    return { changes, unchanged, skipped };
+  }
+
+  applySnapshot(snapshot: SkillSnapshot): SnapshotPlan {
+    const plan = this.planSnapshot(snapshot);
+    for (const change of plan.changes) {
+      this.applyState(change.skill, [change.agent], change.enabled);
+    }
+    return plan;
   }
 
   applyState(skillName: string, agents: AgentName[], enabled: boolean): AgentName[] {

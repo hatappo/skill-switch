@@ -51,16 +51,38 @@ pnpm start
 
 引数なしで起動すると TUI を開きます。
 
-確認や dry-run install 用の補助コマンドとして、`list` と `install-missing` だけ残しています。
+確認、snapshot、dry-run install 用の補助コマンドを用意しています。
 
 ```bash
 node src/cli.ts help
 node src/cli.ts --version
 node src/cli.ts list
 node src/cli.ts list --format json
+node src/cli.ts export > skills.json
+node src/cli.ts import skills.json
+node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
 node src/cli.ts install-missing frontend-design cursor --execute
 ```
+
+`export` は再現可能な `on`/`off` 状態を JSON snapshot として出力します。`mixed` と
+missing 状態は省略します。
+
+```json
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "codex": "on",
+      "claude-code": "off"
+    }
+  }
+}
+```
+
+`import skills.json` は snapshot との差分を未適用変更として読み込んだ状態で TUI を開きます。
+確認してから `a` で apply できます。`apply skills.json` は TUI を開かずに同じ snapshot を
+直接反映するため、dotfiles や bootstrap script に向いています。
 
 `install-missing` は、既にインストール済みの skill の `SKILL.md` から
 `metadata.github-repo` と `metadata.github-path` を読み取り、その skill が存在しない

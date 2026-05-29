@@ -6,9 +6,11 @@ import { test } from "node:test";
 import {
   checkGhCommand,
   discoverSkillFiles,
+  formatSnapshot,
   GH_MISSING_MESSAGE,
   GH_SKILL_MISSING_MESSAGE,
   parseFrontmatter,
+  parseSnapshot,
   provenanceFromFrontmatter,
   readCodexSkillEnabled,
   sanitizeSkillFrontmatter,
@@ -188,6 +190,79 @@ test("applyState uses agent-specific storage", () => {
   const claudeSettings = JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
   assert.equal(claudeSettings.skillOverrides.demo, "off");
   assert.match(readFileSync(cursorSkill, "utf8"), /disable-model-invocation: true/);
+});
+
+test("createSnapshot serializes on and off states only", () => {
+  const home = tmpHome();
+  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
+  writeSkill(codexSkill, "demo");
+  writeSkill(cursorSkill, "demo", "disable-model-invocation: true\n");
+
+  const manager = new SkillManager(home);
+  const snapshot = manager.createSnapshot();
+
+  assert.deepEqual(snapshot, {
+    version: 1,
+    skills: {
+      demo: {
+        codex: "on",
+        cursor: "off",
+        "github-copilot": "on",
+        opencode: "on",
+      },
+    },
+  });
+  assert.equal(parseSnapshot(formatSnapshot(snapshot)).skills.demo?.codex, "on");
+});
+
+test("applySnapshot applies existing entries and reports skipped entries", () => {
+  const home = tmpHome();
+  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
+  writeSkill(codexSkill, "demo");
+  writeSkill(cursorSkill, "demo");
+
+  const manager = new SkillManager(home);
+  const plan = manager.applySnapshot(
+    parseSnapshot(
+      JSON.stringify({
+        version: 1,
+        skills: {
+          demo: {
+            codex: "off",
+            cursor: "on",
+            "claude-code": "off",
+          },
+          missing: {
+            codex: "off",
+          },
+        },
+      }),
+    ),
+  );
+
+  assert.deepEqual(plan.changes, [{ skill: "demo", agent: "codex", enabled: false }]);
+  assert.deepEqual(plan.unchanged, [{ skill: "demo", agent: "cursor", enabled: true }]);
+  assert.deepEqual(plan.skipped, [
+    { skill: "demo", agent: "claude-code", reason: "skill is not installed for agent" },
+    { skill: "missing", agent: "codex", reason: "skill is not installed" },
+  ]);
+  assert.equal(
+    readCodexSkillEnabled(join(home, ".codex", "config.toml")).get(resolve(codexSkill)),
+    false,
+  );
+});
+
+test("parseSnapshot rejects unsupported agents and statuses", () => {
+  assert.throws(
+    () => parseSnapshot(JSON.stringify({ version: 1, skills: { demo: { unknown: "on" } } })),
+    /unsupported agent/,
+  );
+  assert.throws(
+    () => parseSnapshot(JSON.stringify({ version: 1, skills: { demo: { codex: "mixed" } } })),
+    /must be "on" or "off"/,
+  );
 });
 
 test("deleteSkill removes skill directories and stale disable settings", () => {

@@ -3,7 +3,14 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { AGENTS, type AgentName, checkGhCommand, SkillManager } from "./core.ts";
+import {
+  AGENTS,
+  type AgentName,
+  checkGhCommand,
+  formatSnapshot,
+  parseSnapshot,
+  SkillManager,
+} from "./core.ts";
 import { runTui } from "./tui.ts";
 
 type ParsedArgs = {
@@ -38,13 +45,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 function usage(): string {
   return [
     "Usage:",
-    "  skill-switch [--home PATH] [tui]",
-    "  skill-switch help",
-    "  skill-switch version",
+    "  skwitch [--home PATH] [tui]",
+    "  skwitch help",
+    "  skwitch version",
     "",
     "Advanced:",
-    "  skill-switch [--home PATH] list [--format table|json]",
-    "  skill-switch [--home PATH] install-missing <skill> [agent|all]... [--execute]",
+    "  skwitch [--home PATH] list [--format table|json]",
+    "  skwitch [--home PATH] export",
+    "  skwitch [--home PATH] import <snapshot.json>",
+    "  skwitch [--home PATH] apply <snapshot.json>",
+    "  skwitch [--home PATH] install-missing <skill> [agent|all]... [--execute]",
   ].join("\n");
 }
 
@@ -67,6 +77,11 @@ function parseAgents(values: string[]): AgentName[] {
     }
     return value as AgentName;
   });
+}
+
+function readSnapshot(path: string) {
+  const resolved = resolve(path);
+  return parseSnapshot(readFileSync(resolved, "utf8"), resolved);
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
@@ -117,6 +132,51 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       console.log(manager.formatTable(rows));
     }
     return 0;
+  }
+
+  if (command === "export") {
+    process.stdout.write(formatSnapshot(manager.createSnapshot()));
+    return 0;
+  }
+
+  if (command === "import") {
+    const [path] = args.rest;
+    if (!path) {
+      console.error("import requires <snapshot.json>");
+      console.error(usage());
+      return 2;
+    }
+
+    try {
+      return runTui(manager, { snapshot: readSnapshot(path) });
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+
+  if (command === "apply") {
+    const [path] = args.rest;
+    if (!path) {
+      console.error("apply requires <snapshot.json>");
+      console.error(usage());
+      return 2;
+    }
+
+    try {
+      const plan = manager.applySnapshot(readSnapshot(path));
+      for (const skipped of plan.skipped) {
+        const target = skipped.agent ? `${skipped.skill}.${skipped.agent}` : skipped.skill;
+        console.error(`Skipped ${target}: ${skipped.reason}`);
+      }
+      console.log(
+        `Applied ${plan.changes.length} changes. Unchanged ${plan.unchanged.length}. Skipped ${plan.skipped.length}.`,
+      );
+      return 0;
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
   }
 
   if (command === "install-missing") {

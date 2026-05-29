@@ -51,16 +51,39 @@ pnpm start
 
 Run without arguments to open the TUI.
 
-Advanced helper commands are kept for inspection and dry-run install workflows:
+Helper commands are kept for inspection, snapshot workflows, and dry-run install workflows:
 
 ```bash
 node src/cli.ts help
 node src/cli.ts --version
 node src/cli.ts list
 node src/cli.ts list --format json
+node src/cli.ts export > skills.json
+node src/cli.ts import skills.json
+node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
 node src/cli.ts install-missing frontend-design cursor --execute
 ```
+
+`export` writes a JSON snapshot of reproducible `on`/`off` states. `mixed` and
+missing states are omitted.
+
+```json
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "codex": "on",
+      "claude-code": "off"
+    }
+  }
+}
+```
+
+`import skills.json` opens the TUI with snapshot differences loaded as pending
+changes. Review them, then press `a` to apply. `apply skills.json` applies the
+same snapshot directly without opening the TUI, which is useful for dotfiles and
+bootstrap scripts.
 
 `install-missing` reads `metadata.github-repo` and `metadata.github-path` from an
 installed skill's `SKILL.md`, then builds `gh skill install --scope user --agent ...`

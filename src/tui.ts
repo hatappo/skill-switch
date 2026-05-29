@@ -8,6 +8,7 @@ import {
   formatStatus,
   type InstallAction,
   SkillManager,
+  type SkillSnapshot,
   type SkillRow,
 } from "./core.ts";
 
@@ -21,6 +22,9 @@ type DeletePlan = {
   skill: string;
   targets: string[];
 };
+type TuiOptions = {
+  snapshot?: SkillSnapshot;
+};
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -33,8 +37,8 @@ const ANSI = {
   cyan: "\x1b[36m",
 };
 
-export async function runTui(manager: SkillManager): Promise<number> {
-  const tui = new SkillTui(manager);
+export async function runTui(manager: SkillManager, options: TuiOptions = {}): Promise<number> {
+  const tui = new SkillTui(manager, options);
   return tui.run();
 }
 
@@ -47,13 +51,18 @@ class SkillTui {
   private installPlan: InstallPlan | null = null;
   private deletePlan: DeletePlan | null = null;
   private message = "";
+  private readonly initialSnapshot?: SkillSnapshot;
 
-  constructor(manager: SkillManager) {
+  constructor(manager: SkillManager, options: TuiOptions) {
     this.manager = manager;
+    this.initialSnapshot = options.snapshot;
   }
 
   async run(): Promise<number> {
     this.reload();
+    if (this.initialSnapshot) {
+      this.importSnapshot(this.initialSnapshot);
+    }
     readline.emitKeypressEvents(process.stdin);
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true);
@@ -332,13 +341,23 @@ class SkillTui {
     this.message = `Applied ${changed} agent changes.`;
   }
 
+  private importSnapshot(snapshot: SkillSnapshot): void {
+    const plan = this.manager.planSnapshot(snapshot);
+    for (const change of plan.changes) {
+      this.pending.set(this.key(change.skill, change.agent), change.enabled);
+    }
+    this.message =
+      `Imported ${plan.changes.length} pending changes. ` +
+      `Unchanged ${plan.unchanged.length}. Skipped ${plan.skipped.length}.`;
+  }
+
   private prepareInstallMissing(): void {
     const row = this.currentRow();
     if (!row) {
       return;
     }
     if (this.pending.size > 0) {
-      this.message = "Save or reload pending changes before installing missing skills.";
+      this.message = "Apply or reload pending changes before installing missing skills.";
       return;
     }
 
@@ -373,7 +392,7 @@ class SkillTui {
       return;
     }
     if (this.pending.size > 0) {
-      this.message = "Save or reload pending changes before deleting skills.";
+      this.message = "Apply or reload pending changes before deleting skills.";
       return;
     }
 
