@@ -153,3 +153,60 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 - GitHub Copilot CLI docs: https://docs.github.com/copilot/reference/copilot-cli-reference/cli-command-reference
 - OpenCode Agent Skills docs: https://opencode.ai/docs/skills/
 - Gemini CLI configuration docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
+
+
+### gh
+
+```sh
+ $ gh skill install --help | grep '  - '
+  - GitHub Copilot (github-copilot)
+  - Claude Code (claude-code)
+  - Cursor (cursor)
+  - Codex (codex)
+  - Gemini CLI (gemini-cli)
+  - Antigravity (antigravity)
+  - AdaL (adal)
+  - Amp (amp)
+  - Augment (augment)
+  - IBM Bob (bob)
+  - Cline (cline)
+  - CodeBuddy (codebuddy)
+  - Command Code (command-code)
+  - Continue (continue)
+  - Cortex Code (cortex)
+  - Crush (crush)
+  - Deep Agents (deepagents)
+  - Droid (droid)
+  - Firebender (firebender)
+  - Goose (goose)
+  - iFlow CLI (iflow-cli)
+  - Junie (junie)
+  - Kilo Code (kilo)
+  - Kimi Code CLI (kimi-cli)
+  - Kiro CLI (kiro-cli)
+  - Kode (kode)
+  - MCPJam (mcpjam)
+  - Mistral Vibe (mistral-vibe)
+  - Mux (mux)
+  - Neovate (neovate)
+  - OpenClaw (openclaw)
+  - OpenCode (opencode)
+  - OpenHands (openhands)
+  - Pi (pi)
+  - Pochi (pochi)
+  - Qoder (qoder)
+  - Qwen Code (qwen-code)
+  - Replit (replit)
+  - Roo Code (roo)
+  - Trae (trae)
+  - Trae CN (trae-cn)
+  - Universal (universal)
+  - Warp (warp)
+  - Windsurf (windsurf)
+  - Zencoder (zencoder)
+```
+
+## 今後の予定
+
+- Claude Code の `skillOverrides` について、ON/OFF 以外の `"name-only"` と
+  `"user-invocable-only"` も扱えるようにする。

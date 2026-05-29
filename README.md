@@ -206,3 +206,9 @@ Status colors:
   - Windsurf (windsurf)
   - Zencoder (zencoder)
 ```
+
+## Planned Ideas
+
+- Support Claude Code `skillOverrides` values beyond two-state ON/OFF:
+  `"name-only"` and `"user-invocable-only"`.
+
