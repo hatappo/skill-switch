@@ -96,7 +96,7 @@ class SkillTui {
     }
     if (key.name === "q" || key.name === "escape") {
       if (this.pending.size > 0) {
-        this.message = "Pending changes remain. Press s to save or r to discard.";
+        this.message = "Pending changes remain. Press a to apply or r to discard.";
         return false;
       }
       return true;
@@ -117,8 +117,8 @@ class SkillTui {
       this.setRow(true);
     } else if (key.name === "x") {
       this.setRow(false);
-    } else if (key.name === "s") {
-      this.save();
+    } else if (key.name === "a") {
+      this.apply();
     } else if (key.name === "r") {
       this.pending.clear();
       this.reload();
@@ -147,7 +147,7 @@ class SkillTui {
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
     this.writeLine("skwitch | Space=cell | t=toggle row | o=row on | x=row off", width, true);
     this.writeLine(
-      "        | d=delete row | i=install missing | s=save | r=reload | q=quit",
+      "        | d=delete row | i=install missing | a=apply | r=reload | q=quit",
       width,
       true,
     );
@@ -321,7 +321,7 @@ class SkillTui {
     this.message = `Staged ${row.name} across installed agents -> ${enabled ? "on" : "off"}.`;
   }
 
-  private save(): void {
+  private apply(): void {
     let changed = 0;
     for (const [key, enabled] of this.pending) {
       const [skill, agent] = key.split("\0") as [string, AgentName];
@@ -329,7 +329,7 @@ class SkillTui {
     }
     this.pending.clear();
     this.reload();
-    this.message = `Saved ${changed} agent changes.`;
+    this.message = `Applied ${changed} agent changes.`;
   }
 
   private prepareInstallMissing(): void {

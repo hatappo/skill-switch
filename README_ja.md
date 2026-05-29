@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="./README.md">en</a> | <a href="./README_ja.md">ja</a>
+  <a href="./README.md">en</a> | ja
 </p>
 
 # skwitch
@@ -103,7 +103,7 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `d`                     | delete row      | 選択中の skill 行を、存在する Agent 全体で削除   |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
-| `s`                     | save            | 未保存変更を保存                                 |
+| `a`                     | apply           | 未保存変更を各 Agent の設定へ反映                |
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
 | `q`                     | quit            | 終了                                             |
 

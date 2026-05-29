@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="./README.md">en</a> | <a href="./README_ja.md">ja</a>
+  en | <a href="./README_ja.md">ja</a>
 </p>
 
 # skwitch
@@ -103,7 +103,7 @@ Status colors:
 | `d`                     | delete row      | Delete the selected skill row across all agents where it exists   |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
-| `s`                     | save            | Save pending changes                                              |
+| `a`                     | apply           | Apply pending changes                                             |
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
 | `q`                     | quit            | Quit                                                              |
 
