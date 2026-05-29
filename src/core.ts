@@ -416,6 +416,42 @@ export function updateFrontmatterKey(path: string, key: string, value: boolean):
   writeFileSync(path, lines.join(""), "utf8");
 }
 
+export function removeFrontmatterKey(path: string, key: string): boolean {
+  const text = readFileSync(path, "utf8");
+  const lines = text.match(/^.*(?:\r?\n|$)/gm) ?? [];
+  const firstLine = lines[0];
+  if (firstLine === undefined || firstLine.trim() !== "---") {
+    return false;
+  }
+
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (endIndex < 0) {
+    throw new Error(`frontmatter is not closed: ${path}`);
+  }
+
+  const pattern = new RegExp(`^${escapeRegExp(key)}\\s*:`);
+  let removed = false;
+  let keepCurrentBlock = true;
+  const nextLines: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (index > 0 && index < endIndex) {
+      if (!/^\s/.test(lines[index])) {
+        keepCurrentBlock = !pattern.test(lines[index].trim());
+        removed ||= !keepCurrentBlock;
+      }
+      if (!keepCurrentBlock) {
+        continue;
+      }
+    }
+    nextLines.push(lines[index]);
+  }
+
+  if (removed) {
+    writeFileSync(path, nextLines.join(""), "utf8");
+  }
+  return removed;
+}
+
 export function sanitizeSkillFrontmatter(path: string): boolean {
   const text = readFileSync(path, "utf8");
   const lines = text.match(/^.*(?:\r?\n|$)/gm) ?? [];
@@ -687,7 +723,11 @@ class CodexAdapter implements Adapter {
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
-    setCodexSkillEnabled(this.configPath, instance.path, enabled);
+    if (enabled) {
+      removeCodexSkillConfig(this.configPath, instance.path);
+    } else {
+      setCodexSkillEnabled(this.configPath, instance.path, false);
+    }
   }
 
   remove(instance: SkillInstance): void {
@@ -724,8 +764,13 @@ class ClaudeAdapter implements Adapter {
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
     const settings = readJson(this.settingsPath);
-    settings.skillOverrides = readObject(settings.skillOverrides);
-    (settings.skillOverrides as Record<string, unknown>)[instance.name] = enabled ? "on" : "off";
+    const overrides = readObject(settings.skillOverrides);
+    if (enabled) {
+      delete overrides[instance.name];
+    } else {
+      overrides[instance.name] = "off";
+    }
+    settings.skillOverrides = overrides;
     writeJson(this.settingsPath, settings);
   }
 
@@ -768,7 +813,11 @@ class CursorAdapter implements Adapter {
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
-    updateFrontmatterKey(instance.path, "disable-model-invocation", !enabled);
+    if (enabled) {
+      removeFrontmatterKey(instance.path, "disable-model-invocation");
+    } else {
+      updateFrontmatterKey(instance.path, "disable-model-invocation", true);
+    }
   }
 
   remove(_instance: SkillInstance): void {}

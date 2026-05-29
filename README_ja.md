@@ -34,6 +34,22 @@ Cursor は Codex のような path ベースの一括 On/Off 設定を公開し�
 
 Skill の一致判定は `SKILL.md` frontmatter の `name` で行います。`name` がない場合は親ディレクトリ名を使います。
 
+On/Off の書き込みは次のルールに従います。
+
+| Agent              | OFF の書き込み                    | ON の書き込み                                                             |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------- |
+| Codex              | `enabled = false` を追加/更新     | その skill の `[[skills.config]]` エントリを削除                          |
+| Claude Code        | `skillOverrides[name] = off`      | `skillOverrides[name]` を削除                                             |
+| Cursor             | `disable-model-invocation` を設定 | `disable-model-invocation` を削除                                         |
+| GitHub Copilot CLI | `disabledSkills` に追加           | `disabledSkills` から削除                                                 |
+| OpenCode           | `permission.skill[name]=deny`     | 上位の deny rule を上書きできるよう `permission.skill[name]=allow` を明示 |
+| Gemini CLI         | `skills.disabled` に追加          | `skills.disabled` から削除し、必要なら `skills.enabled = true` は維持     |
+
+明示的な ON エントリが既にある状態で OFF にする場合は、各 Agent の OFF 形式へ上書きします。
+たとえば Codex の `enabled = true` は `enabled = false` に、Claude Code の
+`skillOverrides[name] = on` は `off` に、Cursor の `disable-model-invocation: false` は
+`true` に、OpenCode の `allow` は `deny` になります。
+
 ## 使い方
 
 `skwitch` コマンドとして使いたい場合:

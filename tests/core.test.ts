@@ -13,6 +13,7 @@ import {
   parseSnapshot,
   provenanceFromFrontmatter,
   readCodexSkillEnabled,
+  removeFrontmatterKey,
   sanitizeSkillFrontmatter,
   setCodexSkillEnabled,
   SkillManager,
@@ -74,6 +75,34 @@ test("updateFrontmatterKey replaces existing key", () => {
   const text = readFileSync(skill, "utf8");
   assert.match(text, /disable-model-invocation: true/);
   assert.doesNotMatch(text, /disable-model-invocation: false/);
+});
+
+test("removeFrontmatterKey removes a top-level key and its nested block", () => {
+  const home = tmpHome();
+  const skill = join(home, "skill", "SKILL.md");
+  ensureDir(dirname(skill));
+  writeFileSync(
+    skill,
+    [
+      "---",
+      "name: skill",
+      "x-agent-private:",
+      "  enabled: false",
+      "description: Test skill",
+      "---",
+      "",
+      "# skill",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  assert.equal(removeFrontmatterKey(skill, "x-agent-private"), true);
+
+  const text = readFileSync(skill, "utf8");
+  assert.doesNotMatch(text, /x-agent-private/);
+  assert.doesNotMatch(text, /enabled: false/);
+  assert.match(text, /description: Test skill/);
 });
 
 test("sanitizeSkillFrontmatter keeps only portable top-level keys", () => {
@@ -145,6 +174,50 @@ test("setCodexSkillEnabled adds and updates one block", () => {
   setCodexSkillEnabled(config, skill, true);
   assert.equal(readCodexSkillEnabled(config).get(resolve(skill)), true);
   assert.equal(readFileSync(config, "utf8").match(/\[\[skills\.config\]\]/g)?.length, 1);
+});
+
+test("Codex adapter writes OFF and removes config entry for ON", () => {
+  const home = tmpHome();
+  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  writeSkill(codexSkill, "demo");
+  const codexConfig = join(home, ".codex", "config.toml");
+  setCodexSkillEnabled(codexConfig, codexSkill, true);
+
+  const manager = new SkillManager(home);
+  assert.deepEqual(manager.applyState("demo", ["codex"], false), ["codex"]);
+  assert.equal(readCodexSkillEnabled(codexConfig).get(resolve(codexSkill)), false);
+
+  assert.deepEqual(manager.applyState("demo", ["codex"], true), ["codex"]);
+  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(codexSkill)), false);
+});
+
+test("Claude adapter writes OFF and removes override for ON", () => {
+  const home = tmpHome();
+  const claudeSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  writeSkill(claudeSkill, "demo");
+  const claudeSettings = join(home, ".claude", "settings.json");
+  ensureDir(dirname(claudeSettings));
+  writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "on" } }), "utf8");
+
+  const manager = new SkillManager(home);
+  assert.deepEqual(manager.applyState("demo", ["claude-code"], false), ["claude-code"]);
+  assert.equal(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides.demo, "off");
+
+  assert.deepEqual(manager.applyState("demo", ["claude-code"], true), ["claude-code"]);
+  assert.deepEqual(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides, {});
+});
+
+test("Cursor adapter writes OFF and removes frontmatter key for ON", () => {
+  const home = tmpHome();
+  const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
+  writeSkill(cursorSkill, "demo", "disable-model-invocation: false\n");
+
+  const manager = new SkillManager(home);
+  assert.deepEqual(manager.applyState("demo", ["cursor"], false), ["cursor"]);
+  assert.match(readFileSync(cursorSkill, "utf8"), /disable-model-invocation: true/);
+
+  assert.deepEqual(manager.applyState("demo", ["cursor"], true), ["cursor"]);
+  assert.doesNotMatch(readFileSync(cursorSkill, "utf8"), /disable-model-invocation/);
 });
 
 test("SkillManager matches skills by name across agents", () => {
@@ -320,7 +393,7 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
   );
 });
 
-test("Copilot adapter stores disabled skills in settings.json", () => {
+test("Copilot adapter writes OFF and removes disabled entry for ON", () => {
   const home = tmpHome();
   const skill = join(home, ".copilot", "skills", "demo", "SKILL.md");
   const settings = join(home, ".copilot", "settings.json");
@@ -339,9 +412,12 @@ test("Copilot adapter stores disabled skills in settings.json", () => {
 
   assert.deepEqual(manager.applyState("demo", ["github-copilot"], true), ["github-copilot"]);
   assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).disabledSkills, []);
+
+  assert.deepEqual(manager.applyState("demo", ["github-copilot"], false), ["github-copilot"]);
+  assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).disabledSkills, ["demo"]);
 });
 
-test("OpenCode adapter stores skill permissions in opencode.json", () => {
+test("OpenCode adapter writes explicit deny for OFF and explicit allow for ON", () => {
   const home = tmpHome();
   const skill = join(home, ".config", "opencode", "skills", "demo", "SKILL.md");
   const config = join(home, ".config", "opencode", "opencode.json");
@@ -360,9 +436,12 @@ test("OpenCode adapter stores skill permissions in opencode.json", () => {
 
   assert.deepEqual(manager.applyState("demo", ["opencode"], true), ["opencode"]);
   assert.equal(JSON.parse(readFileSync(config, "utf8")).permission.skill.demo, "allow");
+
+  assert.deepEqual(manager.applyState("demo", ["opencode"], false), ["opencode"]);
+  assert.equal(JSON.parse(readFileSync(config, "utf8")).permission.skill.demo, "deny");
 });
 
-test("Gemini adapter stores disabled skills in nested settings", () => {
+test("Gemini adapter writes OFF and removes disabled entry for ON", () => {
   const home = tmpHome();
   const skill = join(home, ".gemini", "skills", "demo", "SKILL.md");
   const settings = join(home, ".gemini", "settings.json");

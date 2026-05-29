@@ -34,6 +34,23 @@ Cursor's `~/.cursor/skills-cursor` directory is managed by Cursor itself and is 
 
 Skill matching uses the `name` field in `SKILL.md` frontmatter, falling back to the parent directory name when `name` is missing.
 
+Enable/disable writes follow these rules:
+
+| Agent              | OFF write                         | ON write                                                              |
+| ------------------ | --------------------------------- | --------------------------------------------------------------------- |
+| Codex              | Add/update `enabled = false`      | Remove that skill's `[[skills.config]]` entry                         |
+| Claude Code        | Set `skillOverrides[name] = off`  | Remove `skillOverrides[name]`                                         |
+| Cursor             | Set `disable-model-invocation`    | Remove `disable-model-invocation`                                     |
+| GitHub Copilot CLI | Add to `disabledSkills`           | Remove from `disabledSkills`                                          |
+| OpenCode           | Set `permission.skill[name]=deny` | Set `permission.skill[name]=allow` to override broader deny rules     |
+| Gemini CLI         | Add to `skills.disabled`          | Remove from `skills.disabled` and keep `skills.enabled = true` if set |
+
+If an explicit ON entry already exists, an OFF action overwrites it with the
+agent's OFF form. For example, Codex `enabled = true` becomes `enabled = false`,
+Claude Code `skillOverrides[name] = on` becomes `off`, Cursor
+`disable-model-invocation: false` becomes `true`, and OpenCode `allow` becomes
+`deny`.
+
 ## Usage
 
 Install it locally if you want the `skwitch` command:
