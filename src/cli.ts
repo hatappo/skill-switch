@@ -66,9 +66,9 @@ function packageVersion(): string {
   return packageJson.version;
 }
 
-function parseAgents(values: string[]): ColumnName[] {
+function parseAgents(values: string[], allColumns: ColumnName[] = [...COLUMNS]): ColumnName[] {
   if (values.includes("all")) {
-    return [...COLUMNS];
+    return [...allColumns];
   }
 
   return values.map((value) => {
@@ -120,16 +120,17 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
 
     const rows = manager.scan();
+    const columns = manager.activeColumns();
     if (format === "json") {
       console.log(
         JSON.stringify(
-          rows.map((row) => row.toJSON()),
+          rows.map((row) => row.toJSON(columns)),
           null,
           2,
         ),
       );
     } else {
-      console.log(manager.formatTable(rows));
+      console.log(manager.formatTable(rows, columns));
     }
     return 0;
   }
@@ -191,7 +192,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     const agentValues = values.filter((value) => value !== "--execute");
     let agents: ColumnName[];
     try {
-      agents = parseAgents(agentValues.length > 0 ? agentValues : ["all"]);
+      agents = parseAgents(agentValues.length > 0 ? agentValues : ["all"], manager.activeColumns());
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       return 2;

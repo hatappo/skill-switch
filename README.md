@@ -31,6 +31,11 @@ Agent IDs follow the names in parentheses used by `gh skill install --help`.
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
 | Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 
+Only columns whose user skill folder exists are shown in the TUI and `list`
+output. Row-wide actions and default `install-missing` targets use those active
+columns only. Agent IDs can still be passed explicitly to `install-missing` for
+bootstrap workflows.
+
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
 Cursor's `~/.cursor/skills-cursor` directory is managed by Cursor itself and is intentionally ignored.

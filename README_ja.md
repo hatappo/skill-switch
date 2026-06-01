@@ -31,6 +31,10 @@ Agent ID は `gh skill install --help` の括弧内の名称に合わせてい�
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | `~/.gemini/settings.json` の `skills.disabled` を書き込み                       |
 | Universal          | `universal`      | `~/.agents/skills`          | Claude Code 以外の Universal 対応 Agent 向け設定をまとめて書き込み              |
 
+TUI と `list` では、user skill folder が存在する列だけを表示します。行全体への操作と
+デフォルトの `install-missing` 対象も、その active な列だけです。bootstrap 用途では
+`install-missing` に Agent ID を明示指定できます。
+
 Cursor は Codex のような path ベースの一括 On/Off 設定を公開していないため、このツールでは `disable-model-invocation` を使います。これは自動呼び出しを止める設定で、明示呼び出しの扱いは Cursor 側の仕様に従います。
 
 `~/.cursor/skills-cursor` は Cursor が管理するディレクトリなので、このツールでは対象外です。

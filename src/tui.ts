@@ -3,7 +3,6 @@ import {
   checkGhCommand,
   COLUMN_LABELS,
   COLUMN_WIDTHS,
-  COLUMNS,
   type ColumnName,
   formatStatus,
   type InstallAction,
@@ -45,6 +44,7 @@ export async function runTui(manager: SkillManager, options: TuiOptions = {}): P
 class SkillTui {
   private readonly manager: SkillManager;
   private rows: SkillRow[] = [];
+  private columns: ColumnName[] = [];
   private rowIndex = 0;
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
@@ -89,8 +89,10 @@ class SkillTui {
 
   private reload(): void {
     this.rows = this.manager.scan();
+    this.columns = this.manager.activeColumns();
     this.rowIndex = Math.min(this.rowIndex, Math.max(0, this.rows.length - 1));
-    this.message = `Loaded ${this.rows.length} skills.`;
+    this.agentIndex = Math.min(this.agentIndex, Math.max(0, this.columns.length - 1));
+    this.message = `Loaded ${this.rows.length} skills across ${this.columns.length} active columns.`;
   }
 
   private handleKey(key: readline.Key): boolean {
@@ -117,7 +119,7 @@ class SkillTui {
     } else if (key.name === "left" || key.name === "h") {
       this.agentIndex = Math.max(0, this.agentIndex - 1);
     } else if (key.name === "right" || key.name === "l") {
-      this.agentIndex = Math.min(COLUMNS.length - 1, this.agentIndex + 1);
+      this.agentIndex = Math.min(Math.max(0, this.columns.length - 1), this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
     } else if (key.name === "t") {
@@ -142,7 +144,7 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
-    const agentColumnsWidth = COLUMNS.reduce(
+    const agentColumnsWidth = this.columns.reduce(
       (total, column) => total + 2 + COLUMN_WIDTHS[column],
       0,
     );
@@ -163,7 +165,7 @@ class SkillTui {
     this.writeLine(
       [
         "Skill".padEnd(nameWidth),
-        ...COLUMNS.map((column) => COLUMN_LABELS[column].padStart(COLUMN_WIDTHS[column])),
+        ...this.columns.map((column) => COLUMN_LABELS[column].padStart(COLUMN_WIDTHS[column])),
       ].join("  "),
       width,
     );
@@ -177,8 +179,8 @@ class SkillTui {
       const selectedRow = top + offset === this.rowIndex;
       const rowName = row.name.slice(0, nameWidth).padEnd(nameWidth);
       let line = selectedRow ? `${ANSI.reverse}${rowName}${ANSI.reset}` : rowName;
-      for (const column of COLUMNS) {
-        const selectedCell = selectedRow && column === COLUMNS[this.agentIndex];
+      for (const column of this.columns) {
+        const selectedCell = selectedRow && column === this.columns[this.agentIndex];
         line += `  ${this.renderStatusCell(row, column, selectedCell, COLUMN_WIDTHS[column])}`;
       }
       this.writeLine(line, width);
@@ -285,10 +287,10 @@ class SkillTui {
 
   private toggleCell(): void {
     const row = this.currentRow();
-    if (!row) {
+    const agent = this.columns[this.agentIndex];
+    if (!row || !agent) {
       return;
     }
-    const agent = COLUMNS[this.agentIndex];
     const status = row.status(agent);
     if (status === "-") {
       this.message = `${row.name} is not installed for ${agent}.`;
@@ -305,7 +307,7 @@ class SkillTui {
     if (!row) {
       return;
     }
-    const values = COLUMNS.flatMap((agent) => {
+    const values = this.columns.flatMap((agent) => {
       const status = row.status(agent);
       if (status === "-") {
         return [];
@@ -322,7 +324,7 @@ class SkillTui {
     if (!row) {
       return;
     }
-    for (const agent of COLUMNS) {
+    for (const agent of this.columns) {
       if (row.status(agent) !== "-") {
         this.pending.set(this.key(row.name, agent), enabled);
       }

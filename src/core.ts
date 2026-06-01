@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -254,12 +255,12 @@ export class SkillRow {
     return "mixed";
   }
 
-  toJSON(): Record<string, unknown> {
+  toJSON(columns: ColumnName[] = [...COLUMNS]): Record<string, unknown> {
     return {
       name: this.name,
-      status: Object.fromEntries(COLUMNS.map((column) => [column, this.status(column)])),
+      status: Object.fromEntries(columns.map((column) => [column, this.status(column)])),
       instances: Object.fromEntries(
-        COLUMNS.map((column) => [column, this.instances[column].map((item) => item.toJSON())]),
+        columns.map((column) => [column, this.instances[column].map((item) => item.toJSON())]),
       ),
     };
   }
@@ -293,6 +294,14 @@ export function discoverSkillFiles(root: string): string[] {
 
 function readDirectory(path: string): Dirent[] {
   return readdirSync(path, { withFileTypes: true });
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export function parseFrontmatter(text: string): Frontmatter {
@@ -1101,8 +1110,17 @@ export class SkillManager {
     };
   }
 
+  activeColumns(): ColumnName[] {
+    return COLUMNS.filter((column) => isDirectory(this.skillRoot(column)));
+  }
+
+  skillRoot(column: ColumnName): string {
+    const parts = column === UNIVERSAL ? UNIVERSAL_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[column];
+    return join(this.home, ...parts);
+  }
+
   discoverUniversal(): SkillInstance[] {
-    return discoverSkillFiles(join(this.home, ...UNIVERSAL_SKILL_ROOT)).flatMap((path) => {
+    return discoverSkillFiles(this.skillRoot(UNIVERSAL)).flatMap((path) => {
       const values = skillFrontmatter(path);
       const name = values.name || basename(dirname(path));
       const provenance = provenanceFromFrontmatter(values);
@@ -1136,11 +1154,11 @@ export class SkillManager {
     return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  createSnapshot(rows = this.scan()): SkillSnapshot {
+  createSnapshot(rows = this.scan(), columns = this.activeColumns()): SkillSnapshot {
     const skills: SkillSnapshot["skills"] = {};
     for (const row of rows) {
       const agents: Partial<Record<ColumnName, SnapshotStatus>> = {};
-      for (const agent of COLUMNS) {
+      for (const agent of columns) {
         const status = row.status(agent);
         if (status === "on" || status === "off") {
           agents[agent] = status;
@@ -1155,6 +1173,7 @@ export class SkillManager {
 
   planSnapshot(snapshot: SkillSnapshot): SnapshotPlan {
     const rows = new Map(this.scan().map((row) => [row.name, row]));
+    const active = new Set(this.activeColumns());
     const changes: SnapshotChange[] = [];
     const unchanged: SnapshotChange[] = [];
     const skipped: SnapshotSkip[] = [];
@@ -1162,6 +1181,10 @@ export class SkillManager {
     for (const [skill, agents] of Object.entries(snapshot.skills)) {
       const row = rows.get(skill);
       for (const [agent, status] of Object.entries(agents) as [ColumnName, SnapshotStatus][]) {
+        if (!active.has(agent)) {
+          skipped.push({ skill, agent, reason: "agent skill folder does not exist" });
+          continue;
+        }
         if (!row) {
           skipped.push({ skill, agent, reason: "skill is not installed" });
           continue;
@@ -1259,10 +1282,7 @@ export class SkillManager {
     return targets;
   }
 
-  buildInstallMissingCommands(
-    skillName: string,
-    agents: ColumnName[] = [...COLUMNS],
-  ): InstallCommand[] {
+  buildInstallMissingCommands(skillName: string, agents?: ColumnName[]): InstallCommand[] {
     const actions = this.buildInstallMissingActions(skillName, agents);
     if (actions.some((action) => action.kind === "copy")) {
       throw new Error(`No GitHub provenance metadata found for ${JSON.stringify(skillName)}.`);
@@ -1270,16 +1290,14 @@ export class SkillManager {
     return actions.filter((action): action is InstallCommand => action.kind === "gh");
   }
 
-  buildInstallMissingActions(
-    skillName: string,
-    agents: ColumnName[] = [...COLUMNS],
-  ): InstallAction[] {
+  buildInstallMissingActions(skillName: string, agents?: ColumnName[]): InstallAction[] {
     const row = this.scan().find((item) => item.name === skillName);
     if (!row) {
       throw new Error(`No installed skill named ${JSON.stringify(skillName)}.`);
     }
 
-    const missingAgents = agents.filter((agent) => row.instances[agent].length === 0);
+    const targetAgents = agents ?? this.activeColumns();
+    const missingAgents = targetAgents.filter((agent) => row.instances[agent].length === 0);
     if (missingAgents.length === 0) {
       return [];
     }
@@ -1369,23 +1387,23 @@ export class SkillManager {
     }
   }
 
-  formatTable(rows = this.scan()): string {
+  formatTable(rows = this.scan(), columns = this.activeColumns()): string {
     const nameWidth = Math.max("Skill".length, ...rows.map((row) => row.name.length));
     const lines = [
       [
         "Skill".padEnd(nameWidth),
-        ...COLUMNS.map((column) => COLUMN_LABELS[column].padEnd(COLUMN_WIDTHS[column])),
+        ...columns.map((column) => COLUMN_LABELS[column].padEnd(COLUMN_WIDTHS[column])),
       ].join("  "),
-      ["-".repeat(nameWidth), ...COLUMNS.map((column) => "-".repeat(COLUMN_WIDTHS[column]))].join(
+      ["-".repeat(nameWidth), ...columns.map((column) => "-".repeat(COLUMN_WIDTHS[column]))].join(
         "  ",
       ),
     ];
     for (const row of rows) {
-      const values = COLUMNS.map((column) => formatStatus(row.status(column)));
+      const values = columns.map((column) => formatStatus(row.status(column)));
       lines.push(
         [
           row.name.padEnd(nameWidth),
-          ...COLUMNS.map((column, index) => values[index].padEnd(COLUMN_WIDTHS[column])),
+          ...columns.map((column, index) => values[index].padEnd(COLUMN_WIDTHS[column])),
         ].join("  "),
       );
     }

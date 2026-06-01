@@ -241,18 +241,18 @@ test("SkillManager matches skills by name across agents", () => {
   assert.equal(rows[0].status("cursor"), "off");
 });
 
-test("formatTable shows Universal as the last column", () => {
+test("activeColumns and formatTable hide columns without skill folders", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
   writeSkill(join(home, ".codex", "skills", "demo", "SKILL.md"), "demo");
 
-  const table = new SkillManager(home).formatTable();
+  const manager = new SkillManager(home);
+  const table = manager.formatTable();
   const header = table.split("\n")[0];
 
-  assert.match(
-    header,
-    /Codex\s+Claude Code\s+Cursor\s+Copilot CLI\s+OpenCode\s+Gemini CLI\s+Universal$/,
-  );
+  assert.deepEqual(manager.activeColumns(), ["codex", "universal"]);
+  assert.match(header, /Codex\s+Universal$/);
+  assert.doesNotMatch(header, /Claude Code|Cursor|Copilot CLI|OpenCode|Gemini CLI/);
 });
 
 test("applyState uses agent-specific storage", () => {
@@ -335,7 +335,7 @@ test("applySnapshot applies existing entries and reports skipped entries", () =>
   assert.deepEqual(plan.changes, [{ skill: "demo", agent: "codex", enabled: false }]);
   assert.deepEqual(plan.unchanged, [{ skill: "demo", agent: "cursor", enabled: true }]);
   assert.deepEqual(plan.skipped, [
-    { skill: "demo", agent: "claude-code", reason: "skill is not installed for agent" },
+    { skill: "demo", agent: "claude-code", reason: "agent skill folder does not exist" },
     { skill: "missing", agent: "codex", reason: "skill is not installed" },
   ]);
   assert.equal(
@@ -581,6 +581,26 @@ test("buildInstallMissingCommands uses provenance from installed agents", () => 
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "cursor"],
     ],
   );
+});
+
+test("install-missing defaults to active columns only", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  writeSkill(sourceSkill, "demo");
+  ensureDir(join(home, ".codex", "skills"));
+
+  const actions = new SkillManager(home).buildInstallMissingActions("demo");
+
+  assert.deepEqual(actions, [
+    {
+      kind: "copy",
+      agent: "codex",
+      skillName: "demo",
+      sourcePath: resolve(dirname(sourceSkill)),
+      targetPath: join(home, ".codex", "skills", "demo"),
+      command: `copy ${resolve(dirname(sourceSkill))} -> ${join(home, ".codex", "skills", "demo")}`,
+    },
+  ]);
 });
 
 test("install-missing falls back to local copy without provenance", () => {
