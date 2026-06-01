@@ -19,11 +19,15 @@ export const AGENTS = [
   "opencode",
   "gemini-cli",
 ] as const;
-export const SHARED = "shared";
-export const COLUMNS = [...AGENTS, SHARED] as const;
+export const UNIVERSAL = "universal";
+export const COLUMNS = [...AGENTS, UNIVERSAL] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type ColumnName = (typeof COLUMNS)[number];
-export type SkillStatus = "on" | "off" | "mixed" | "installed" | "-";
+export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter((agent) => agent !== "claude-code") as Exclude<
+  AgentName,
+  "claude-code"
+>[];
+export type SkillStatus = "on" | "off" | "mixed" | "-";
 export const AGENT_LABELS: Record<AgentName, string> = {
   codex: "Codex",
   "claude-code": "Claude Code",
@@ -34,7 +38,7 @@ export const AGENT_LABELS: Record<AgentName, string> = {
 };
 export const COLUMN_LABELS: Record<ColumnName, string> = {
   ...AGENT_LABELS,
-  shared: "Shared",
+  universal: "Universal",
 };
 export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   codex: 6,
@@ -46,9 +50,9 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
 };
 export const COLUMN_WIDTHS: Record<ColumnName, number> = {
   ...AGENT_COLUMN_WIDTHS,
-  shared: 6,
+  universal: 9,
 };
-export const SHARED_SKILL_ROOT = [".agents", "skills"] as const;
+export const UNIVERSAL_SKILL_ROOT = [".agents", "skills"] as const;
 export const AGENT_PRIMARY_SKILL_ROOTS: Record<AgentName, string[]> = {
   codex: [".codex", "skills"],
   "claude-code": [".claude", "skills"],
@@ -103,16 +107,16 @@ export type InstallAction = InstallCommand | CopyInstallAction;
 export type SnapshotStatus = "on" | "off";
 export type SkillSnapshot = {
   version: 1;
-  skills: Record<string, Partial<Record<AgentName, SnapshotStatus>>>;
+  skills: Record<string, Partial<Record<ColumnName, SnapshotStatus>>>;
 };
 export type SnapshotChange = {
   skill: string;
-  agent: AgentName;
+  agent: ColumnName;
   enabled: boolean;
 };
 export type SnapshotSkip = {
   skill: string;
-  agent?: AgentName;
+  agent?: ColumnName;
   reason: string;
 };
 export type SnapshotPlan = {
@@ -150,15 +154,15 @@ export function parseSnapshot(text: string, source = "snapshot"): SkillSnapshot 
       throw new Error(`${source}.skills.${skill} must be an object`);
     }
 
-    const agents: Partial<Record<AgentName, SnapshotStatus>> = {};
+    const agents: Partial<Record<ColumnName, SnapshotStatus>> = {};
     for (const [agent, rawStatus] of Object.entries(rawAgents)) {
-      if (!AGENTS.includes(agent as AgentName)) {
+      if (!COLUMNS.includes(agent as ColumnName)) {
         throw new Error(`${source}.skills.${skill} has unsupported agent: ${agent}`);
       }
       if (rawStatus !== "on" && rawStatus !== "off") {
         throw new Error(`${source}.skills.${skill}.${agent} must be "on" or "off"`);
       }
-      agents[agent as AgentName] = rawStatus;
+      agents[agent as ColumnName] = rawStatus;
     }
     skills[skill] = agents;
   }
@@ -239,9 +243,6 @@ export class SkillRow {
     const items = this.instances[column];
     if (items.length === 0) {
       return "-";
-    }
-    if (column === SHARED) {
-      return "installed";
     }
     const enabledCount = items.filter((item) => item.enabled).length;
     if (enabledCount === items.length) {
@@ -708,6 +709,7 @@ function codexSkillBlock(path: string, enabled: boolean): string[] {
 
 type Adapter = {
   discover(): SkillInstance[];
+  isEnabled(instance: SkillInstance): boolean;
   setEnabled(instance: SkillInstance, enabled: boolean): void;
   remove?(instance: SkillInstance): void;
 };
@@ -724,20 +726,23 @@ class CodexAdapter implements Adapter {
   }
 
   discover(): SkillInstance[] {
-    const configured = readCodexSkillEnabled(this.configPath);
     return this.roots.flatMap((root) =>
       discoverSkillFiles(root).map((path) => {
-        const resolved = resolve(path);
         const values = skillFrontmatter(path);
+        const name = values.name || basename(dirname(path));
         return new SkillInstance(
           "codex",
-          values.name || basename(dirname(path)),
+          name,
           path,
-          configured.get(resolved) ?? true,
+          this.isEnabled(new SkillInstance("codex", name, path, true, null)),
           provenanceFromFrontmatter(values),
         );
       }),
     );
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    return readCodexSkillEnabled(this.configPath).get(resolve(instance.path)) ?? true;
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -765,8 +770,6 @@ class ClaudeAdapter implements Adapter {
   }
 
   discover(): SkillInstance[] {
-    const settings = readJson(this.settingsPath);
-    const overrides = readObject(settings.skillOverrides);
     return discoverSkillFiles(this.root).map((path) => {
       const values = skillFrontmatter(path);
       const name = values.name || basename(dirname(path));
@@ -774,10 +777,16 @@ class ClaudeAdapter implements Adapter {
         "claude-code",
         name,
         path,
-        overrides[name] !== "off",
+        this.isEnabled(new SkillInstance("claude-code", name, path, true, null)),
         provenanceFromFrontmatter(values),
       );
     });
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const settings = readJson(this.settingsPath);
+    const overrides = readObject(settings.skillOverrides);
+    return overrides[instance.name] !== "off";
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -819,15 +828,21 @@ class CursorAdapter implements Adapter {
   discover(): SkillInstance[] {
     return discoverSkillFiles(this.root).map((path) => {
       const values = skillFrontmatter(path);
-      const disabled = values["disable-model-invocation"]?.toLowerCase() === "true";
+      const name = values.name || basename(dirname(path));
       return new SkillInstance(
         "cursor",
-        values.name || basename(dirname(path)),
+        name,
         path,
-        !disabled,
+        this.isEnabled(new SkillInstance("cursor", name, path, true, null)),
         provenanceFromFrontmatter(values),
       );
     });
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const disabled =
+      skillFrontmatter(instance.path)["disable-model-invocation"]?.toLowerCase() === "true";
+    return !disabled;
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -853,8 +868,6 @@ class CopilotAdapter implements Adapter {
   }
 
   discover(): SkillInstance[] {
-    const settings = readJson(this.settingsPath);
-    const disabled = new Set(readStringArray(settings.disabledSkills));
     return this.roots.flatMap((root) =>
       discoverSkillFiles(root).map((path) => {
         const values = skillFrontmatter(path);
@@ -863,11 +876,16 @@ class CopilotAdapter implements Adapter {
           "github-copilot",
           name,
           path,
-          !disabled.has(name),
+          this.isEnabled(new SkillInstance("github-copilot", name, path, true, null)),
           provenanceFromFrontmatter(values),
         );
       }),
     );
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const settings = readJson(this.settingsPath);
+    return !new Set(readStringArray(settings.disabledSkills)).has(instance.name);
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -903,8 +921,6 @@ class OpenCodeAdapter implements Adapter {
   }
 
   discover(): SkillInstance[] {
-    const config = readJson(this.configPath);
-    const skillPermissions = readSkillPermissions(config);
     return this.roots.flatMap((root) =>
       discoverSkillFiles(root).map((path) => {
         const values = skillFrontmatter(path);
@@ -913,11 +929,16 @@ class OpenCodeAdapter implements Adapter {
           "opencode",
           name,
           path,
-          skillPermissionFor(skillPermissions, name) !== "deny",
+          this.isEnabled(new SkillInstance("opencode", name, path, true, null)),
           provenanceFromFrontmatter(values),
         );
       }),
     );
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const config = readJson(this.configPath);
+    return skillPermissionFor(readSkillPermissions(config), instance.name) !== "deny";
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -959,10 +980,6 @@ class GeminiAdapter implements Adapter {
   }
 
   discover(): SkillInstance[] {
-    const settings = readJson(this.settingsPath);
-    const skills = readObject(settings.skills);
-    const globallyEnabled = skills.enabled !== false;
-    const disabled = new Set(readStringArray(skills.disabled));
     return discoverSkillFiles(this.root).map((path) => {
       const values = skillFrontmatter(path);
       const name = values.name || basename(dirname(path));
@@ -970,10 +987,18 @@ class GeminiAdapter implements Adapter {
         "gemini-cli",
         name,
         path,
-        globallyEnabled && !disabled.has(name),
+        this.isEnabled(new SkillInstance("gemini-cli", name, path, true, null)),
         provenanceFromFrontmatter(values),
       );
     });
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const settings = readJson(this.settingsPath);
+    const skills = readObject(settings.skills);
+    const globallyEnabled = skills.enabled !== false;
+    const disabled = new Set(readStringArray(skills.disabled));
+    return globallyEnabled && !disabled.has(instance.name);
   }
 
   setEnabled(instance: SkillInstance, enabled: boolean): void {
@@ -1076,24 +1101,29 @@ export class SkillManager {
     };
   }
 
-  discoverShared(): SkillInstance[] {
-    return discoverSkillFiles(join(this.home, ...SHARED_SKILL_ROOT)).map((path) => {
+  discoverUniversal(): SkillInstance[] {
+    return discoverSkillFiles(join(this.home, ...UNIVERSAL_SKILL_ROOT)).flatMap((path) => {
       const values = skillFrontmatter(path);
-      return new SkillInstance(
-        SHARED,
-        values.name || basename(dirname(path)),
-        path,
-        true,
-        provenanceFromFrontmatter(values),
-      );
+      const name = values.name || basename(dirname(path));
+      const provenance = provenanceFromFrontmatter(values);
+      return UNIVERSAL_TARGET_AGENTS.map((agent) => {
+        const instance = new SkillInstance(agent, name, path, true, provenance);
+        return new SkillInstance(
+          UNIVERSAL,
+          name,
+          path,
+          this.adapters[agent].isEnabled(instance),
+          provenance,
+        );
+      });
     });
   }
 
   scan(): SkillRow[] {
     const rows = new Map<string, SkillRow>();
-    for (const instance of this.discoverShared()) {
+    for (const instance of this.discoverUniversal()) {
       const row = rows.get(instance.name) ?? new SkillRow(instance.name);
-      row.instances.shared.push(instance);
+      row.instances.universal.push(instance);
       rows.set(instance.name, row);
     }
     for (const agent of AGENTS) {
@@ -1109,8 +1139,8 @@ export class SkillManager {
   createSnapshot(rows = this.scan()): SkillSnapshot {
     const skills: SkillSnapshot["skills"] = {};
     for (const row of rows) {
-      const agents: Partial<Record<AgentName, SnapshotStatus>> = {};
-      for (const agent of AGENTS) {
+      const agents: Partial<Record<ColumnName, SnapshotStatus>> = {};
+      for (const agent of COLUMNS) {
         const status = row.status(agent);
         if (status === "on" || status === "off") {
           agents[agent] = status;
@@ -1131,7 +1161,7 @@ export class SkillManager {
 
     for (const [skill, agents] of Object.entries(snapshot.skills)) {
       const row = rows.get(skill);
-      for (const [agent, status] of Object.entries(agents) as [AgentName, SnapshotStatus][]) {
+      for (const [agent, status] of Object.entries(agents) as [ColumnName, SnapshotStatus][]) {
         if (!row) {
           skipped.push({ skill, agent, reason: "skill is not installed" });
           continue;
@@ -1164,24 +1194,38 @@ export class SkillManager {
     return plan;
   }
 
-  applyState(skillName: string, agents: AgentName[], enabled: boolean): AgentName[] {
+  applyState(skillName: string, agents: ColumnName[], enabled: boolean): ColumnName[] {
     const row = this.scan().find((item) => item.name === skillName);
     if (!row) {
       return [];
     }
 
-    const changed: AgentName[] = [];
+    const changed: ColumnName[] = [];
     for (const agent of agents) {
       const instances = row.instances[agent];
       if (instances.length === 0) {
         continue;
       }
-      for (const instance of instances) {
-        this.adapters[agent].setEnabled(instance, enabled);
+      if (agent === UNIVERSAL) {
+        const instance = instances[0];
+        this.setUniversalEnabled(instance, enabled);
+      } else {
+        for (const instance of instances) {
+          this.adapters[agent].setEnabled(instance, enabled);
+        }
       }
       changed.push(agent);
     }
     return changed;
+  }
+
+  private setUniversalEnabled(instance: SkillInstance, enabled: boolean): void {
+    for (const agent of UNIVERSAL_TARGET_AGENTS) {
+      this.adapters[agent].setEnabled(
+        new SkillInstance(agent, instance.name, instance.path, true, instance.provenance),
+        enabled,
+      );
+    }
   }
 
   deleteTargets(skillName: string): string[] {
@@ -1200,8 +1244,8 @@ export class SkillManager {
         this.adapters[agent].remove?.(instance);
       }
     }
-    for (const instance of row.instances.shared) {
-      for (const agent of AGENTS) {
+    for (const instance of uniqueInstances(row.instances.universal)) {
+      for (const agent of UNIVERSAL_TARGET_AGENTS) {
         this.adapters[agent].remove?.(
           new SkillInstance(agent, instance.name, instance.path, true, instance.provenance),
         );
@@ -1253,7 +1297,7 @@ export class SkillManager {
           "--scope",
           "user",
           "--agent",
-          agent === SHARED ? "universal" : agent,
+          agent,
         ];
         if (source.pin) {
           args.push("--pin", source.pin);
@@ -1275,7 +1319,7 @@ export class SkillManager {
     const sourceDirectory = resolve(dirname(copySource.path));
     const directoryName = basename(sourceDirectory);
     return missingAgents.map((agent) => {
-      const root = agent === SHARED ? SHARED_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[agent];
+      const root = agent === UNIVERSAL ? UNIVERSAL_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[agent];
       const targetPath = join(this.home, ...root, directoryName);
       return {
         kind: "copy",
@@ -1313,9 +1357,14 @@ export class SkillManager {
     const copiedSkillPath = join(action.targetPath, "SKILL.md");
     sanitizeSkillFrontmatter(copiedSkillPath);
 
-    if (action.agent !== SHARED) {
+    if (action.agent !== UNIVERSAL) {
       this.adapters[action.agent].remove?.(
         new SkillInstance(action.agent, action.skillName, copiedSkillPath, true, null),
+      );
+    } else {
+      this.setUniversalEnabled(
+        new SkillInstance(UNIVERSAL, action.skillName, copiedSkillPath, true, null),
+        true,
       );
     }
   }
@@ -1359,6 +1408,19 @@ function uniqueSkillDirectories(row: SkillRow): string[] {
   return targets;
 }
 
+function uniqueInstances(instances: SkillInstance[]): SkillInstance[] {
+  const seen = new Set<string>();
+  const result: SkillInstance[] = [];
+  for (const instance of instances) {
+    const key = resolve(instance.path);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(instance);
+    }
+  }
+  return result;
+}
+
 function shellQuote(value: string): string {
   if (/^[A-Za-z0-9_./:@-]+$/.test(value)) {
     return value;
@@ -1371,7 +1433,6 @@ export function formatStatus(status: SkillStatus): string {
     on: "ON",
     off: "OFF",
     mixed: "MIX",
-    installed: "INST",
     "-": "-",
   }[status];
 }

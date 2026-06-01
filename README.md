@@ -18,9 +18,8 @@
 ## Supported agents
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
-`shared` is skwitch's column for `~/.agents/skills`; installs to it use the
-`universal` gh agent. It is shown at the right edge of the table and is not a
-toggle target.
+`universal` is skwitch's column for `~/.agents/skills`; installs to it use the
+`universal` gh agent. It is shown at the right edge of the table.
 
 | Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
 | ------------------ | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
@@ -30,7 +29,7 @@ toggle target.
 | GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
 | OpenCode           | `opencode`       | `~/.config/opencode/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
-| Shared             | `shared`         | `~/.agents/skills`          | Inventory column only; no independent toggle setting                                   |
+| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
@@ -40,21 +39,38 @@ Skill matching uses the `name` field in `SKILL.md` frontmatter, falling back to 
 
 Enable/disable writes follow these rules:
 
-| Agent              | OFF write                         | ON write                                                              |
-| ------------------ | --------------------------------- | --------------------------------------------------------------------- |
-| Shared             | Not supported                     | Not supported                                                         |
-| Codex              | Add/update `enabled = false`      | Remove that skill's `[[skills.config]]` entry                         |
-| Claude Code        | Set `skillOverrides[name] = off`  | Remove `skillOverrides[name]`                                         |
-| Cursor             | Set `disable-model-invocation`    | Remove `disable-model-invocation`                                     |
-| GitHub Copilot CLI | Add to `disabledSkills`           | Remove from `disabledSkills`                                          |
-| OpenCode           | Set `permission.skill[name]=deny` | Set `permission.skill[name]=allow` to override broader deny rules     |
-| Gemini CLI         | Add to `skills.disabled`          | Remove from `skills.disabled` and keep `skills.enabled = true` if set |
+| Agent              | OFF write                                                                                                  | ON write                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Codex              | Add/update `enabled = false`                                                                               | Remove that skill's `[[skills.config]]` entry                          |
+| Claude Code        | Set `skillOverrides[name] = off`                                                                           | Remove `skillOverrides[name]`                                          |
+| Cursor             | Set `disable-model-invocation`                                                                             | Remove `disable-model-invocation`                                      |
+| GitHub Copilot CLI | Add to `disabledSkills`                                                                                    | Remove from `disabledSkills`                                           |
+| OpenCode           | Set `permission.skill[name]=deny`                                                                          | Set `permission.skill[name]=allow` to override broader deny rules      |
+| Gemini CLI         | Add to `skills.disabled`                                                                                   | Remove from `skills.disabled` and keep `skills.enabled = true` if set  |
+| Universal          | Applies OFF writes to Codex, Cursor, Copilot CLI, OpenCode, and Gemini CLI for the `~/.agents/skills` path | Applies ON writes to those same agents for the `~/.agents/skills` path |
 
 If an explicit ON entry already exists, an OFF action overwrites it with the
 agent's OFF form. For example, Codex `enabled = true` becomes `enabled = false`,
 Claude Code `skillOverrides[name] = on` becomes `off`, Cursor
 `disable-model-invocation: false` becomes `true`, and OpenCode `allow` becomes
 `deny`.
+
+Agent-specific columns only control skills in that agent's primary user skill
+folder. They do not change a same-named Universal skill. The Universal column
+only controls the `~/.agents/skills` copy by writing settings for
+Universal-compatible agents. Claude Code is excluded because its official skill
+locations do not include `~/.agents/skills`.
+
+Universal toggle targets:
+
+| Agent              | Targeted by Universal | Setting touched for `~/.agents/skills` |
+| ------------------ | --------------------- | -------------------------------------- |
+| Codex              | Yes                   | `~/.codex/config.toml` path entry      |
+| Claude Code        | No                    | Not touched                            |
+| Cursor             | Yes                   | Universal skill `SKILL.md` frontmatter |
+| GitHub Copilot CLI | Yes                   | `~/.copilot/settings.json`             |
+| OpenCode           | Yes                   | `~/.config/opencode/opencode.json`     |
+| Gemini CLI         | Yes                   | `~/.gemini/settings.json`              |
 
 ## Usage
 
@@ -84,7 +100,7 @@ node src/cli.ts export > skills.json
 node src/cli.ts import skills.json
 node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
-node src/cli.ts install-missing frontend-design shared cursor --execute
+node src/cli.ts install-missing frontend-design universal cursor --execute
 ```
 
 `export` writes a JSON snapshot of reproducible `on`/`off` states. `mixed` and
@@ -118,7 +134,7 @@ spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
 `allowed-tools`.
 When multiple installed columns can be used as a source, the first match is used
 in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI, OpenCode, Gemini
-CLI, Shared.
+CLI, Universal.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.
@@ -129,14 +145,13 @@ TUI keys:
 
 Status colors:
 
-| Status         | Color                                   |
-| -------------- | --------------------------------------- |
-| `ON`           | Green                                   |
-| `OFF`          | Red                                     |
-| `MIX`          | Yellow                                  |
-| `INST`         | Cyan; installed in the shared inventory |
-| `-`            | Dim gray                                |
-| Unsaved change | Bold cyan with `*`                      |
+| Status         | Color              |
+| -------------- | ------------------ |
+| `ON`           | Green              |
+| `OFF`          | Red                |
+| `MIX`          | Yellow             |
+| `-`            | Dim gray           |
+| Unsaved change | Bold cyan with `*` |
 
 | Key                     | Command         | Action                                                            |
 | ----------------------- | --------------- | ----------------------------------------------------------------- |

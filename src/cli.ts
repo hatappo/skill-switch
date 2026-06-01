@@ -54,7 +54,7 @@ function usage(): string {
     "  skwitch [--home PATH] export",
     "  skwitch [--home PATH] import <snapshot.json>",
     "  skwitch [--home PATH] apply <snapshot.json>",
-    "  skwitch [--home PATH] install-missing <skill> [agent|shared|all]... [--execute]",
+    "  skwitch [--home PATH] install-missing <skill> [agent|universal|all]... [--execute]",
   ].join("\n");
 }
 

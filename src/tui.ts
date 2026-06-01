@@ -1,7 +1,5 @@
 import readline from "node:readline";
 import {
-  AGENTS,
-  type AgentName,
   checkGhCommand,
   COLUMN_LABELS,
   COLUMN_WIDTHS,
@@ -9,14 +7,13 @@ import {
   type ColumnName,
   formatStatus,
   type InstallAction,
-  SHARED,
   SkillManager,
   type SkillSnapshot,
   type SkillRow,
 } from "./core.ts";
 
-type PendingKey = `${string}\0${AgentName}`;
-type DisplayStatus = "ON" | "OFF" | "MIX" | "INST" | "-";
+type PendingKey = `${string}\0${ColumnName}`;
+type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
 type InstallPlan = {
   skill: string;
   actions: InstallAction[];
@@ -120,7 +117,7 @@ class SkillTui {
     } else if (key.name === "left" || key.name === "h") {
       this.agentIndex = Math.max(0, this.agentIndex - 1);
     } else if (key.name === "right" || key.name === "l") {
-      this.agentIndex = Math.min(AGENTS.length - 1, this.agentIndex + 1);
+      this.agentIndex = Math.min(COLUMNS.length - 1, this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
     } else if (key.name === "t") {
@@ -181,7 +178,7 @@ class SkillTui {
       const rowName = row.name.slice(0, nameWidth).padEnd(nameWidth);
       let line = selectedRow ? `${ANSI.reverse}${rowName}${ANSI.reset}` : rowName;
       for (const column of COLUMNS) {
-        const selectedCell = selectedRow && column === AGENTS[this.agentIndex];
+        const selectedCell = selectedRow && column === COLUMNS[this.agentIndex];
         line += `  ${this.renderStatusCell(row, column, selectedCell, COLUMN_WIDTHS[column])}`;
       }
       this.writeLine(line, width);
@@ -250,7 +247,7 @@ class SkillTui {
   }
 
   private displayStatus(row: SkillRow, column: ColumnName): DisplayStatus {
-    const staged = column === SHARED ? undefined : this.pending.get(this.key(row.name, column));
+    const staged = this.pending.get(this.key(row.name, column));
     if (staged !== undefined) {
       return staged ? "ON" : "OFF";
     }
@@ -263,7 +260,7 @@ class SkillTui {
     selected: boolean,
     width: number,
   ): string {
-    const pending = column !== SHARED && this.pending.has(this.key(row.name, column));
+    const pending = this.pending.has(this.key(row.name, column));
     const label = `${this.displayStatus(row, column)}${pending ? "*" : ""}`.padStart(width);
     const color = this.statusColor(this.displayStatus(row, column), pending);
     const decorated = `${color}${label}${ANSI.reset}`;
@@ -283,9 +280,6 @@ class SkillTui {
     if (status === "MIX") {
       return ANSI.yellow;
     }
-    if (status === "INST") {
-      return ANSI.cyan;
-    }
     return ANSI.dim;
   }
 
@@ -294,7 +288,7 @@ class SkillTui {
     if (!row) {
       return;
     }
-    const agent = AGENTS[this.agentIndex];
+    const agent = COLUMNS[this.agentIndex];
     const status = row.status(agent);
     if (status === "-") {
       this.message = `${row.name} is not installed for ${agent}.`;
@@ -311,7 +305,7 @@ class SkillTui {
     if (!row) {
       return;
     }
-    const values = AGENTS.flatMap((agent) => {
+    const values = COLUMNS.flatMap((agent) => {
       const status = row.status(agent);
       if (status === "-") {
         return [];
@@ -328,18 +322,18 @@ class SkillTui {
     if (!row) {
       return;
     }
-    for (const agent of AGENTS) {
+    for (const agent of COLUMNS) {
       if (row.status(agent) !== "-") {
         this.pending.set(this.key(row.name, agent), enabled);
       }
     }
-    this.message = `Staged ${row.name} across installed agents -> ${enabled ? "on" : "off"}.`;
+    this.message = `Staged ${row.name} across installed columns -> ${enabled ? "on" : "off"}.`;
   }
 
   private apply(): void {
     let changed = 0;
     for (const [key, enabled] of this.pending) {
-      const [skill, agent] = key.split("\0") as [string, AgentName];
+      const [skill, agent] = key.split("\0") as [string, ColumnName];
       changed += this.manager.applyState(skill, [agent], enabled).length;
     }
     this.pending.clear();
@@ -463,7 +457,7 @@ class SkillTui {
     this.message = `Deleted ${plan.skill} from ${deleted.length} directories.`;
   }
 
-  private key(skill: string, agent: AgentName): PendingKey {
+  private key(skill: string, agent: ColumnName): PendingKey {
     return `${skill}\0${agent}`;
   }
 }
