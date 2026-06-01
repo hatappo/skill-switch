@@ -18,15 +18,19 @@
 ## Supported agents
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
+`shared` is skwitch's column for `~/.agents/skills`; installs to it use the
+`universal` gh agent. It is shown at the right edge of the table and is not a
+toggle target.
 
-| Agent              | ID               | User skill folders                                                  | Toggle mechanism                                                                       |
-| ------------------ | ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Codex              | `codex`          | `~/.agents/skills`, `~/.codex/skills`                               | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
-| Claude Code        | `claude-code`    | `~/.claude/skills`                                                  | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
-| Cursor             | `cursor`         | `~/.cursor/skills`                                                  | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
-| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`, `~/.agents/skills`                             | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
-| OpenCode           | `opencode`       | `~/.config/opencode/skills`, `~/.claude/skills`, `~/.agents/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
-| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`                                                  | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
+| Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
+| ------------------ | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| Codex              | `codex`          | `~/.codex/skills`           | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
+| Claude Code        | `claude-code`    | `~/.claude/skills`          | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
+| Cursor             | `cursor`         | `~/.cursor/skills`          | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
+| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
+| OpenCode           | `opencode`       | `~/.config/opencode/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
+| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
+| Shared             | `shared`         | `~/.agents/skills`          | Inventory column only; no independent toggle setting                                   |
 
 Cursor does not currently expose the same path-based enable/disable config used by Codex. For Cursor, this tool uses the documented/observed frontmatter control that prevents automatic model invocation while keeping explicit invocation possible.
 
@@ -38,6 +42,7 @@ Enable/disable writes follow these rules:
 
 | Agent              | OFF write                         | ON write                                                              |
 | ------------------ | --------------------------------- | --------------------------------------------------------------------- |
+| Shared             | Not supported                     | Not supported                                                         |
 | Codex              | Add/update `enabled = false`      | Remove that skill's `[[skills.config]]` entry                         |
 | Claude Code        | Set `skillOverrides[name] = off`  | Remove `skillOverrides[name]`                                         |
 | Cursor             | Set `disable-model-invocation`    | Remove `disable-model-invocation`                                     |
@@ -79,7 +84,7 @@ node src/cli.ts export > skills.json
 node src/cli.ts import skills.json
 node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
-node src/cli.ts install-missing frontend-design cursor --execute
+node src/cli.ts install-missing frontend-design shared cursor --execute
 ```
 
 `export` writes a JSON snapshot of reproducible `on`/`off` states. `mixed` and
@@ -111,9 +116,9 @@ local skill directory to the missing agents' primary user skill folders.
 During local copy, `SKILL.md` frontmatter is sanitized to keep only Agent Skills
 spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
 `allowed-tools`.
-When multiple installed agents can be used as a source, the first match is used
+When multiple installed columns can be used as a source, the first match is used
 in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI, OpenCode, Gemini
-CLI.
+CLI, Shared.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.
@@ -124,13 +129,14 @@ TUI keys:
 
 Status colors:
 
-| Status         | Color              |
-| -------------- | ------------------ |
-| `ON`           | Green              |
-| `OFF`          | Red                |
-| `MIX`          | Yellow             |
-| `-`            | Dim gray           |
-| Unsaved change | Bold cyan with `*` |
+| Status         | Color                                   |
+| -------------- | --------------------------------------- |
+| `ON`           | Green                                   |
+| `OFF`          | Red                                     |
+| `MIX`          | Yellow                                  |
+| `INST`         | Cyan; installed in the shared inventory |
+| `-`            | Dim gray                                |
+| Unsaved change | Bold cyan with `*`                      |
 
 | Key                     | Command         | Action                                                            |
 | ----------------------- | --------------- | ----------------------------------------------------------------- |
@@ -211,4 +217,3 @@ Status colors:
 
 - Support Claude Code `skillOverrides` values beyond two-state ON/OFF:
   `"name-only"` and `"user-invocable-only"`.
-

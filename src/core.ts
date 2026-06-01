@@ -19,8 +19,11 @@ export const AGENTS = [
   "opencode",
   "gemini-cli",
 ] as const;
+export const SHARED = "shared";
+export const COLUMNS = [...AGENTS, SHARED] as const;
 export type AgentName = (typeof AGENTS)[number];
-export type SkillStatus = "on" | "off" | "mixed" | "-";
+export type ColumnName = (typeof COLUMNS)[number];
+export type SkillStatus = "on" | "off" | "mixed" | "installed" | "-";
 export const AGENT_LABELS: Record<AgentName, string> = {
   codex: "Codex",
   "claude-code": "Claude Code",
@@ -28,6 +31,10 @@ export const AGENT_LABELS: Record<AgentName, string> = {
   "github-copilot": "Copilot CLI",
   opencode: "OpenCode",
   "gemini-cli": "Gemini CLI",
+};
+export const COLUMN_LABELS: Record<ColumnName, string> = {
+  ...AGENT_LABELS,
+  shared: "Shared",
 };
 export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   codex: 6,
@@ -37,8 +44,13 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   opencode: 8,
   "gemini-cli": 10,
 };
+export const COLUMN_WIDTHS: Record<ColumnName, number> = {
+  ...AGENT_COLUMN_WIDTHS,
+  shared: 6,
+};
+export const SHARED_SKILL_ROOT = [".agents", "skills"] as const;
 export const AGENT_PRIMARY_SKILL_ROOTS: Record<AgentName, string[]> = {
-  codex: [".agents", "skills"],
+  codex: [".codex", "skills"],
   "claude-code": [".claude", "skills"],
   cursor: [".cursor", "skills"],
   "github-copilot": [".copilot", "skills"],
@@ -72,14 +84,14 @@ export type SkillProvenance = {
 
 export type InstallCommand = {
   kind: "gh";
-  agent: AgentName;
+  agent: ColumnName;
   args: string[];
   command: string;
 };
 
 export type CopyInstallAction = {
   kind: "copy";
-  agent: AgentName;
+  agent: ColumnName;
   skillName: string;
   sourcePath: string;
   targetPath: string;
@@ -184,14 +196,14 @@ export function checkGhCommand(command = "gh"): string | null {
 }
 
 export class SkillInstance {
-  readonly agent: AgentName;
+  readonly agent: ColumnName;
   readonly name: string;
   readonly path: string;
   readonly enabled: boolean;
   readonly provenance: SkillProvenance | null;
 
   constructor(
-    agent: AgentName,
+    agent: ColumnName,
     name: string,
     path: string,
     enabled: boolean,
@@ -217,16 +229,19 @@ export class SkillInstance {
 
 export class SkillRow {
   readonly name: string;
-  readonly instances: Record<AgentName, SkillInstance[]> = createAgentRecord(() => []);
+  readonly instances: Record<ColumnName, SkillInstance[]> = createColumnRecord(() => []);
 
   constructor(name: string) {
     this.name = name;
   }
 
-  status(agent: AgentName): SkillStatus {
-    const items = this.instances[agent];
+  status(column: ColumnName): SkillStatus {
+    const items = this.instances[column];
     if (items.length === 0) {
       return "-";
+    }
+    if (column === SHARED) {
+      return "installed";
     }
     const enabledCount = items.filter((item) => item.enabled).length;
     if (enabledCount === items.length) {
@@ -241,9 +256,9 @@ export class SkillRow {
   toJSON(): Record<string, unknown> {
     return {
       name: this.name,
-      status: Object.fromEntries(AGENTS.map((agent) => [agent, this.status(agent)])),
+      status: Object.fromEntries(COLUMNS.map((column) => [column, this.status(column)])),
       instances: Object.fromEntries(
-        AGENTS.map((agent) => [agent, this.instances[agent].map((item) => item.toJSON())]),
+        COLUMNS.map((column) => [column, this.instances[column].map((item) => item.toJSON())]),
       ),
     };
   }
@@ -535,8 +550,11 @@ function removeString(value: unknown, item: string): string[] {
   return readStringArray(value).filter((entry) => entry !== item);
 }
 
-function createAgentRecord<T>(factory: (agent: AgentName) => T): Record<AgentName, T> {
-  return Object.fromEntries(AGENTS.map((agent) => [agent, factory(agent)])) as Record<AgentName, T>;
+function createColumnRecord<T>(factory: (column: ColumnName) => T): Record<ColumnName, T> {
+  return Object.fromEntries(COLUMNS.map((column) => [column, factory(column)])) as Record<
+    ColumnName,
+    T
+  >;
 }
 
 export function readCodexSkillEnabled(configPath: string): Map<string, boolean> {
@@ -701,7 +719,7 @@ class CodexAdapter implements Adapter {
 
   constructor(home: string) {
     this.home = home;
-    this.roots = [join(home, ".agents", "skills"), join(home, ".codex", "skills")];
+    this.roots = [join(home, ".codex", "skills")];
     this.configPath = join(home, ".codex", "config.toml");
   }
 
@@ -830,7 +848,7 @@ class CopilotAdapter implements Adapter {
 
   constructor(home: string) {
     this.home = home;
-    this.roots = [join(home, ".copilot", "skills"), join(home, ".agents", "skills")];
+    this.roots = [join(home, ".copilot", "skills")];
     this.settingsPath = join(home, ".copilot", "settings.json");
   }
 
@@ -880,11 +898,7 @@ class OpenCodeAdapter implements Adapter {
 
   constructor(home: string) {
     this.home = home;
-    this.roots = [
-      join(home, ".config", "opencode", "skills"),
-      join(home, ".claude", "skills"),
-      join(home, ".agents", "skills"),
-    ];
+    this.roots = [join(home, ".config", "opencode", "skills")];
     this.configPath = join(home, ".config", "opencode", "opencode.json");
   }
 
@@ -1062,8 +1076,26 @@ export class SkillManager {
     };
   }
 
+  discoverShared(): SkillInstance[] {
+    return discoverSkillFiles(join(this.home, ...SHARED_SKILL_ROOT)).map((path) => {
+      const values = skillFrontmatter(path);
+      return new SkillInstance(
+        SHARED,
+        values.name || basename(dirname(path)),
+        path,
+        true,
+        provenanceFromFrontmatter(values),
+      );
+    });
+  }
+
   scan(): SkillRow[] {
     const rows = new Map<string, SkillRow>();
+    for (const instance of this.discoverShared()) {
+      const row = rows.get(instance.name) ?? new SkillRow(instance.name);
+      row.instances.shared.push(instance);
+      rows.set(instance.name, row);
+    }
     for (const agent of AGENTS) {
       for (const instance of this.adapters[agent].discover()) {
         const row = rows.get(instance.name) ?? new SkillRow(instance.name);
@@ -1168,6 +1200,13 @@ export class SkillManager {
         this.adapters[agent].remove?.(instance);
       }
     }
+    for (const instance of row.instances.shared) {
+      for (const agent of AGENTS) {
+        this.adapters[agent].remove?.(
+          new SkillInstance(agent, instance.name, instance.path, true, instance.provenance),
+        );
+      }
+    }
 
     const targets = uniqueSkillDirectories(row);
     for (const target of targets) {
@@ -1178,7 +1217,7 @@ export class SkillManager {
 
   buildInstallMissingCommands(
     skillName: string,
-    agents: AgentName[] = [...AGENTS],
+    agents: ColumnName[] = [...COLUMNS],
   ): InstallCommand[] {
     const actions = this.buildInstallMissingActions(skillName, agents);
     if (actions.some((action) => action.kind === "copy")) {
@@ -1189,7 +1228,7 @@ export class SkillManager {
 
   buildInstallMissingActions(
     skillName: string,
-    agents: AgentName[] = [...AGENTS],
+    agents: ColumnName[] = [...COLUMNS],
   ): InstallAction[] {
     const row = this.scan().find((item) => item.name === skillName);
     if (!row) {
@@ -1201,7 +1240,7 @@ export class SkillManager {
       return [];
     }
 
-    const source = AGENTS.flatMap((agent) => row.instances[agent]).find(
+    const source = COLUMNS.flatMap((agent) => row.instances[agent]).find(
       (instance) => instance.provenance !== null,
     )?.provenance;
     if (source) {
@@ -1214,7 +1253,7 @@ export class SkillManager {
           "--scope",
           "user",
           "--agent",
-          agent,
+          agent === SHARED ? "universal" : agent,
         ];
         if (source.pin) {
           args.push("--pin", source.pin);
@@ -1228,7 +1267,7 @@ export class SkillManager {
       });
     }
 
-    const copySource = AGENTS.flatMap((agent) => row.instances[agent])[0];
+    const copySource = COLUMNS.flatMap((agent) => row.instances[agent])[0];
     if (!copySource) {
       throw new Error(`No installed skill named ${JSON.stringify(skillName)}.`);
     }
@@ -1236,7 +1275,8 @@ export class SkillManager {
     const sourceDirectory = resolve(dirname(copySource.path));
     const directoryName = basename(sourceDirectory);
     return missingAgents.map((agent) => {
-      const targetPath = join(this.home, ...AGENT_PRIMARY_SKILL_ROOTS[agent], directoryName);
+      const root = agent === SHARED ? SHARED_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[agent];
+      const targetPath = join(this.home, ...root, directoryName);
       return {
         kind: "copy",
         agent,
@@ -1273,9 +1313,11 @@ export class SkillManager {
     const copiedSkillPath = join(action.targetPath, "SKILL.md");
     sanitizeSkillFrontmatter(copiedSkillPath);
 
-    this.adapters[action.agent].remove?.(
-      new SkillInstance(action.agent, action.skillName, copiedSkillPath, true, null),
-    );
+    if (action.agent !== SHARED) {
+      this.adapters[action.agent].remove?.(
+        new SkillInstance(action.agent, action.skillName, copiedSkillPath, true, null),
+      );
+    }
   }
 
   formatTable(rows = this.scan()): string {
@@ -1283,19 +1325,18 @@ export class SkillManager {
     const lines = [
       [
         "Skill".padEnd(nameWidth),
-        ...AGENTS.map((agent) => AGENT_LABELS[agent].padEnd(AGENT_COLUMN_WIDTHS[agent])),
+        ...COLUMNS.map((column) => COLUMN_LABELS[column].padEnd(COLUMN_WIDTHS[column])),
       ].join("  "),
-      [
-        "-".repeat(nameWidth),
-        ...AGENTS.map((agent) => "-".repeat(AGENT_COLUMN_WIDTHS[agent])),
-      ].join("  "),
+      ["-".repeat(nameWidth), ...COLUMNS.map((column) => "-".repeat(COLUMN_WIDTHS[column]))].join(
+        "  ",
+      ),
     ];
     for (const row of rows) {
-      const values = AGENTS.map((agent) => formatStatus(row.status(agent)));
+      const values = COLUMNS.map((column) => formatStatus(row.status(column)));
       lines.push(
         [
           row.name.padEnd(nameWidth),
-          ...AGENTS.map((agent, index) => values[index].padEnd(AGENT_COLUMN_WIDTHS[agent])),
+          ...COLUMNS.map((column, index) => values[index].padEnd(COLUMN_WIDTHS[column])),
         ].join("  "),
       );
     }
@@ -1306,8 +1347,8 @@ export class SkillManager {
 function uniqueSkillDirectories(row: SkillRow): string[] {
   const seen = new Set<string>();
   const targets: string[] = [];
-  for (const agent of AGENTS) {
-    for (const instance of row.instances[agent]) {
+  for (const column of COLUMNS) {
+    for (const instance of row.instances[column]) {
       const target = resolve(dirname(instance.path));
       if (!seen.has(target)) {
         seen.add(target);
@@ -1330,6 +1371,7 @@ export function formatStatus(status: SkillStatus): string {
     on: "ON",
     off: "OFF",
     mixed: "MIX",
+    installed: "INST",
     "-": "-",
   }[status];
 }

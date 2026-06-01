@@ -1,19 +1,22 @@
 import readline from "node:readline";
 import {
-  AGENT_LABELS,
-  AGENT_COLUMN_WIDTHS,
   AGENTS,
   type AgentName,
   checkGhCommand,
+  COLUMN_LABELS,
+  COLUMN_WIDTHS,
+  COLUMNS,
+  type ColumnName,
   formatStatus,
   type InstallAction,
+  SHARED,
   SkillManager,
   type SkillSnapshot,
   type SkillRow,
 } from "./core.ts";
 
 type PendingKey = `${string}\0${AgentName}`;
-type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
+type DisplayStatus = "ON" | "OFF" | "MIX" | "INST" | "-";
 type InstallPlan = {
   skill: string;
   actions: InstallAction[];
@@ -142,8 +145,8 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
-    const agentColumnsWidth = AGENTS.reduce(
-      (total, agent) => total + 2 + AGENT_COLUMN_WIDTHS[agent],
+    const agentColumnsWidth = COLUMNS.reduce(
+      (total, column) => total + 2 + COLUMN_WIDTHS[column],
       0,
     );
     const nameWidth = Math.max(12, Math.min(42, width - agentColumnsWidth));
@@ -163,7 +166,7 @@ class SkillTui {
     this.writeLine(
       [
         "Skill".padEnd(nameWidth),
-        ...AGENTS.map((agent) => AGENT_LABELS[agent].padStart(AGENT_COLUMN_WIDTHS[agent])),
+        ...COLUMNS.map((column) => COLUMN_LABELS[column].padStart(COLUMN_WIDTHS[column])),
       ].join("  "),
       width,
     );
@@ -177,9 +180,9 @@ class SkillTui {
       const selectedRow = top + offset === this.rowIndex;
       const rowName = row.name.slice(0, nameWidth).padEnd(nameWidth);
       let line = selectedRow ? `${ANSI.reverse}${rowName}${ANSI.reset}` : rowName;
-      for (const agent of AGENTS) {
-        const selectedCell = selectedRow && agent === AGENTS[this.agentIndex];
-        line += `  ${this.renderStatusCell(row, agent, selectedCell, AGENT_COLUMN_WIDTHS[agent])}`;
+      for (const column of COLUMNS) {
+        const selectedCell = selectedRow && column === AGENTS[this.agentIndex];
+        line += `  ${this.renderStatusCell(row, column, selectedCell, COLUMN_WIDTHS[column])}`;
       }
       this.writeLine(line, width);
     }
@@ -246,23 +249,23 @@ class SkillTui {
     return false;
   }
 
-  private displayStatus(row: SkillRow, agent: AgentName): DisplayStatus {
-    const staged = this.pending.get(this.key(row.name, agent));
+  private displayStatus(row: SkillRow, column: ColumnName): DisplayStatus {
+    const staged = column === SHARED ? undefined : this.pending.get(this.key(row.name, column));
     if (staged !== undefined) {
       return staged ? "ON" : "OFF";
     }
-    return formatStatus(row.status(agent)) as DisplayStatus;
+    return formatStatus(row.status(column)) as DisplayStatus;
   }
 
   private renderStatusCell(
     row: SkillRow,
-    agent: AgentName,
+    column: ColumnName,
     selected: boolean,
     width: number,
   ): string {
-    const pending = this.pending.has(this.key(row.name, agent));
-    const label = `${this.displayStatus(row, agent)}${pending ? "*" : ""}`.padStart(width);
-    const color = this.statusColor(this.displayStatus(row, agent), pending);
+    const pending = column !== SHARED && this.pending.has(this.key(row.name, column));
+    const label = `${this.displayStatus(row, column)}${pending ? "*" : ""}`.padStart(width);
+    const color = this.statusColor(this.displayStatus(row, column), pending);
     const decorated = `${color}${label}${ANSI.reset}`;
     return selected ? `${ANSI.reverse}${decorated}${ANSI.reset}` : decorated;
   }
@@ -279,6 +282,9 @@ class SkillTui {
     }
     if (status === "MIX") {
       return ANSI.yellow;
+    }
+    if (status === "INST") {
+      return ANSI.cyan;
     }
     return ANSI.dim;
   }
@@ -381,7 +387,7 @@ class SkillTui {
     }
 
     this.installPlan = { skill: row.name, actions };
-    const agents = actions.map((action) => AGENT_LABELS[action.agent]).join(", ");
+    const agents = actions.map((action) => COLUMN_LABELS[action.agent]).join(", ");
     const method = actions[0]?.kind === "copy" ? "copy locally" : "run gh";
     this.message = `Install ${row.name} for ${agents}? Press y to ${method}, n to cancel.`;
   }
@@ -425,7 +431,7 @@ class SkillTui {
       try {
         this.manager.executeInstallAction(action);
       } catch (error) {
-        resultMessage = `Install failed for ${AGENT_LABELS[action.agent]}: ${error instanceof Error ? error.message : String(error)}`;
+        resultMessage = `Install failed for ${COLUMN_LABELS[action.agent]}: ${error instanceof Error ? error.message : String(error)}`;
         break;
       }
       installed += 1;

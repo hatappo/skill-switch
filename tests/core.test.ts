@@ -178,7 +178,7 @@ test("setCodexSkillEnabled adds and updates one block", () => {
 
 test("Codex adapter writes OFF and removes config entry for ON", () => {
   const home = tmpHome();
-  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
   writeSkill(codexSkill, "demo");
   const codexConfig = join(home, ".codex", "config.toml");
   setCodexSkillEnabled(codexConfig, codexSkill, true);
@@ -223,6 +223,7 @@ test("Cursor adapter writes OFF and removes frontmatter key for ON", () => {
 test("SkillManager matches skills by name across agents", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
+  writeSkill(join(home, ".codex", "skills", "demo", "SKILL.md"), "demo");
   writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo");
   writeSkill(
     join(home, ".cursor", "skills", "demo", "SKILL.md"),
@@ -234,14 +235,29 @@ test("SkillManager matches skills by name across agents", () => {
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, "demo");
+  assert.equal(rows[0].status("shared"), "installed");
   assert.equal(rows[0].status("codex"), "on");
   assert.equal(rows[0].status("claude-code"), "on");
   assert.equal(rows[0].status("cursor"), "off");
 });
 
+test("formatTable shows Shared as the last column", () => {
+  const home = tmpHome();
+  writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
+  writeSkill(join(home, ".codex", "skills", "demo", "SKILL.md"), "demo");
+
+  const table = new SkillManager(home).formatTable();
+  const header = table.split("\n")[0];
+
+  assert.match(
+    header,
+    /Codex\s+Claude Code\s+Cursor\s+Copilot CLI\s+OpenCode\s+Gemini CLI\s+Shared$/,
+  );
+});
+
 test("applyState uses agent-specific storage", () => {
   const home = tmpHome();
-  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
   const claudeSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
   const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
   writeSkill(codexSkill, "demo");
@@ -267,8 +283,10 @@ test("applyState uses agent-specific storage", () => {
 
 test("createSnapshot serializes on and off states only", () => {
   const home = tmpHome();
-  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const sharedSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
   const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
+  writeSkill(sharedSkill, "demo");
   writeSkill(codexSkill, "demo");
   writeSkill(cursorSkill, "demo", "disable-model-invocation: true\n");
 
@@ -281,8 +299,6 @@ test("createSnapshot serializes on and off states only", () => {
       demo: {
         codex: "on",
         cursor: "off",
-        "github-copilot": "on",
-        opencode: "on",
       },
     },
   });
@@ -291,7 +307,7 @@ test("createSnapshot serializes on and off states only", () => {
 
 test("applySnapshot applies existing entries and reports skipped entries", () => {
   const home = tmpHome();
-  const codexSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
   const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
   writeSkill(codexSkill, "demo");
   writeSkill(cursorSkill, "demo");
@@ -367,17 +383,17 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
 
   const manager = new SkillManager(home);
   assert.deepEqual(manager.deleteTargets("demo"), [
-    resolve(dirname(sharedSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
+    resolve(dirname(sharedSkill)),
   ]);
 
   const deleted = manager.deleteSkill("demo");
 
   assert.deepEqual(deleted, [
-    resolve(dirname(sharedSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
+    resolve(dirname(sharedSkill)),
   ]);
   assert.equal(existsSync(dirname(sharedSkill)), false);
   assert.equal(existsSync(dirname(claudeSkill)), false);
@@ -485,11 +501,25 @@ test("buildInstallMissingCommands uses provenance from installed agents", () => 
     ].join("\n"),
   );
 
-  const commands = new SkillManager(home).buildInstallMissingCommands("demo", ["codex", "cursor"]);
+  const commands = new SkillManager(home).buildInstallMissingCommands("demo", [
+    "shared",
+    "codex",
+    "cursor",
+  ]);
 
   assert.deepEqual(
     commands.map((command) => command.args),
     [
+      [
+        "skill",
+        "install",
+        "example/skills",
+        "skills/demo",
+        "--scope",
+        "user",
+        "--agent",
+        "universal",
+      ],
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "codex"],
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "cursor"],
     ],
@@ -536,5 +566,36 @@ test("install-missing falls back to local copy without provenance", () => {
       .find((row) => row.name === "demo")
       ?.status("github-copilot"),
     "on",
+  );
+});
+
+test("install-missing can copy to Shared", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  writeSkill(sourceSkill, "demo");
+
+  const manager = new SkillManager(home);
+  const actions = manager.buildInstallMissingActions("demo", ["shared"]);
+
+  assert.deepEqual(actions, [
+    {
+      kind: "copy",
+      agent: "shared",
+      skillName: "demo",
+      sourcePath: resolve(dirname(sourceSkill)),
+      targetPath: join(home, ".agents", "skills", "demo"),
+      command: `copy ${resolve(dirname(sourceSkill))} -> ${join(home, ".agents", "skills", "demo")}`,
+    },
+  ]);
+
+  manager.executeInstallAction(actions[0]);
+
+  assert.equal(existsSync(join(home, ".agents", "skills", "demo", "SKILL.md")), true);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("shared"),
+    "installed",
   );
 });

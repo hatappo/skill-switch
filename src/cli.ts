@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import {
-  AGENTS,
-  type AgentName,
+  COLUMNS,
+  type ColumnName,
   checkGhCommand,
   formatSnapshot,
   parseSnapshot,
@@ -54,7 +54,7 @@ function usage(): string {
     "  skwitch [--home PATH] export",
     "  skwitch [--home PATH] import <snapshot.json>",
     "  skwitch [--home PATH] apply <snapshot.json>",
-    "  skwitch [--home PATH] install-missing <skill> [agent|all]... [--execute]",
+    "  skwitch [--home PATH] install-missing <skill> [agent|shared|all]... [--execute]",
   ].join("\n");
 }
 
@@ -66,16 +66,16 @@ function packageVersion(): string {
   return packageJson.version;
 }
 
-function parseAgents(values: string[]): AgentName[] {
+function parseAgents(values: string[]): ColumnName[] {
   if (values.includes("all")) {
-    return [...AGENTS];
+    return [...COLUMNS];
   }
 
   return values.map((value) => {
-    if (!AGENTS.includes(value as AgentName)) {
+    if (!COLUMNS.includes(value as ColumnName)) {
       throw new Error(`unsupported agent: ${value}`);
     }
-    return value as AgentName;
+    return value as ColumnName;
   });
 }
 
@@ -189,7 +189,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 
     const execute = values.includes("--execute");
     const agentValues = values.filter((value) => value !== "--execute");
-    let agents: AgentName[];
+    let agents: ColumnName[];
     try {
       agents = parseAgents(agentValues.length > 0 ? agentValues : ["all"]);
     } catch (error) {

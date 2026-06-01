@@ -18,15 +18,18 @@
 ## 対応 Agent
 
 Agent ID は `gh skill install --help` の括弧内の名称に合わせています。
+`shared` は skwitch 内で `~/.agents/skills` を表す列です。この列への install は gh の
+`universal` agent を使います。表では右端に表示され、On/Off の対象にはなりません。
 
-| Agent              | ID               | User skill folders                                                  | 反映先                                                                          |
-| ------------------ | ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Codex              | `codex`          | `~/.agents/skills`, `~/.codex/skills`                               | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
-| Claude Code        | `claude-code`    | `~/.claude/skills`                                                  | `~/.claude/settings.json` の `skillOverrides` を書き込み                        |
-| Cursor             | `cursor`         | `~/.cursor/skills`                                                  | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み     |
-| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`, `~/.agents/skills`                             | `~/.copilot/settings.json` の `disabledSkills` を書き込み                       |
-| OpenCode           | `opencode`       | `~/.config/opencode/skills`, `~/.claude/skills`, `~/.agents/skills` | `~/.config/opencode/opencode.json` の `permission.skill` を書き込み             |
-| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`                                                  | `~/.gemini/settings.json` の `skills.disabled` を書き込み                       |
+| Agent              | ID               | User skill folders          | 反映先                                                                          |
+| ------------------ | ---------------- | --------------------------- | ------------------------------------------------------------------------------- |
+| Codex              | `codex`          | `~/.codex/skills`           | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
+| Claude Code        | `claude-code`    | `~/.claude/skills`          | `~/.claude/settings.json` の `skillOverrides` を書き込み                        |
+| Cursor             | `cursor`         | `~/.cursor/skills`          | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み     |
+| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | `~/.copilot/settings.json` の `disabledSkills` を書き込み                       |
+| OpenCode           | `opencode`       | `~/.config/opencode/skills` | `~/.config/opencode/opencode.json` の `permission.skill` を書き込み             |
+| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | `~/.gemini/settings.json` の `skills.disabled` を書き込み                       |
+| Shared             | `shared`         | `~/.agents/skills`          | 存在確認用の列です。独立した On/Off 設定はありません                            |
 
 Cursor は Codex のような path ベースの一括 On/Off 設定を公開していないため、このツールでは `disable-model-invocation` を使います。これは自動呼び出しを止める設定で、明示呼び出しの扱いは Cursor 側の仕様に従います。
 
@@ -38,6 +41,7 @@ On/Off の書き込みは次のルールに従います。
 
 | Agent              | OFF の書き込み                    | ON の書き込み                                                             |
 | ------------------ | --------------------------------- | ------------------------------------------------------------------------- |
+| Shared             | 対応しません                      | 対応しません                                                              |
 | Codex              | `enabled = false` を追加/更新     | その skill の `[[skills.config]]` エントリを削除                          |
 | Claude Code        | `skillOverrides[name] = off`      | `skillOverrides[name]` を削除                                             |
 | Cursor             | `disable-model-invocation` を設定 | `disable-model-invocation` を削除                                         |
@@ -78,7 +82,7 @@ node src/cli.ts export > skills.json
 node src/cli.ts import skills.json
 node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
-node src/cli.ts install-missing frontend-design cursor --execute
+node src/cli.ts install-missing frontend-design shared cursor --execute
 ```
 
 `export` は再現可能な `on`/`off` 状態を JSON snapshot として出力します。`mixed` と
@@ -108,8 +112,8 @@ GitHub provenance がない場合は、既存の local skill directory を missi
 user skill folder へコピーします。
 local copy 時は `SKILL.md` frontmatter を sanitize し、Agent Skills spec の field である
 `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` だけを残します。
-複数 Agent をインストール元として使える場合は、Codex、Claude Code、Cursor、
-GitHub Copilot CLI、OpenCode、Gemini CLI の順で最初に見つかったものを使います。
+複数の列をインストール元として使える場合は、Codex、Claude Code、Cursor、
+GitHub Copilot CLI、OpenCode、Gemini CLI、Shared の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
@@ -120,13 +124,14 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 
 ステータス色:
 
-| Status     | 色                   |
-| ---------- | -------------------- |
-| `ON`       | 緑                   |
-| `OFF`      | 赤                   |
-| `MIX`      | 黄                   |
-| `-`        | グレー               |
-| 未保存変更 | `*` 付きの太字シアン |
+| Status     | 色                              |
+| ---------- | ------------------------------- |
+| `ON`       | 緑                              |
+| `OFF`      | 赤                              |
+| `MIX`      | 黄                              |
+| `INST`     | シアン。shared inventory に存在 |
+| `-`        | グレー                          |
+| 未保存変更 | `*` 付きの太字シアン            |
 
 キー操作:
 
@@ -153,7 +158,6 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 - GitHub Copilot CLI docs: https://docs.github.com/copilot/reference/copilot-cli-reference/cli-command-reference
 - OpenCode Agent Skills docs: https://opencode.ai/docs/skills/
 - Gemini CLI configuration docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
-
 
 ### gh
 
