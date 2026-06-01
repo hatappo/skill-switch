@@ -173,6 +173,12 @@ Status colors:
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
 | `q`                     | quit            | Quit                                                              |
 
+Advanced keys:
+
+| Key | Command     | Action                                                                                       |
+| --- | ----------- | -------------------------------------------------------------------------------------------- |
+| `v` | column view | Toggle between active columns and all supported columns. Inactive column headers are dimmed. |
+
 ## References
 
 - Codex Agent Skills docs: https://developers.openai.com/codex/skills

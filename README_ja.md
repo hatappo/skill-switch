@@ -169,6 +169,12 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
 | `q`                     | quit            | 終了                                             |
 
+Advanced keys:
+
+| Key | コマンド    | 動作                                                                                                 |
+| --- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `v` | column view | active な列だけの表示と、supported agent 全列表示を切り替えます。inactive な列名は薄く表示されます。 |
+
 ## 参考
 
 - Codex Agent Skills docs: https://developers.openai.com/codex/skills

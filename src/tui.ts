@@ -3,6 +3,7 @@ import {
   checkGhCommand,
   COLUMN_LABELS,
   COLUMN_WIDTHS,
+  COLUMNS,
   type ColumnName,
   formatStatus,
   type InstallAction,
@@ -45,12 +46,14 @@ class SkillTui {
   private readonly manager: SkillManager;
   private rows: SkillRow[] = [];
   private columns: ColumnName[] = [];
+  private activeColumns: ColumnName[] = [];
   private rowIndex = 0;
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
   private installPlan: InstallPlan | null = null;
   private deletePlan: DeletePlan | null = null;
   private message = "";
+  private showAllColumns = false;
   private readonly initialSnapshot?: SkillSnapshot;
 
   constructor(manager: SkillManager, options: TuiOptions) {
@@ -89,10 +92,15 @@ class SkillTui {
 
   private reload(): void {
     this.rows = this.manager.scan();
-    this.columns = this.manager.activeColumns();
+    this.refreshColumns();
     this.rowIndex = Math.min(this.rowIndex, Math.max(0, this.rows.length - 1));
     this.agentIndex = Math.min(this.agentIndex, Math.max(0, this.columns.length - 1));
-    this.message = `Loaded ${this.rows.length} skills across ${this.columns.length} active columns.`;
+    this.message = `Loaded ${this.rows.length} skills across ${this.columns.length} ${this.columnModeLabel()} columns.`;
+  }
+
+  private refreshColumns(): void {
+    this.activeColumns = this.manager.activeColumns();
+    this.columns = this.showAllColumns ? [...COLUMNS] : this.activeColumns;
   }
 
   private handleKey(key: readline.Key): boolean {
@@ -137,8 +145,21 @@ class SkillTui {
       this.prepareInstallMissing();
     } else if (key.name === "d") {
       this.prepareDelete();
+    } else if (key.name === "v") {
+      this.toggleColumnView();
     }
     return false;
+  }
+
+  private toggleColumnView(): void {
+    this.showAllColumns = !this.showAllColumns;
+    this.refreshColumns();
+    this.agentIndex = Math.min(this.agentIndex, Math.max(0, this.columns.length - 1));
+    this.message = `Column view: ${this.columnModeLabel()} columns.`;
+  }
+
+  private columnModeLabel(): string {
+    return this.showAllColumns ? "all" : "active";
   }
 
   private draw(): void {
@@ -165,7 +186,7 @@ class SkillTui {
     this.writeLine(
       [
         "Skill".padEnd(nameWidth),
-        ...this.columns.map((column) => COLUMN_LABELS[column].padStart(COLUMN_WIDTHS[column])),
+        ...this.columns.map((column) => this.renderColumnHeader(column)),
       ].join("  "),
       width,
     );
@@ -195,6 +216,15 @@ class SkillTui {
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
     process.stdout.write(`${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}\n`);
+  }
+
+  private renderColumnHeader(column: ColumnName): string {
+    const label = COLUMN_LABELS[column].padStart(COLUMN_WIDTHS[column]);
+    return this.isActiveColumn(column) ? label : `${ANSI.dim}${label}${ANSI.reset}`;
+  }
+
+  private isActiveColumn(column: ColumnName): boolean {
+    return this.activeColumns.includes(column);
   }
 
   private stripAnsi(text: string): string {
