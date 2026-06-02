@@ -170,6 +170,7 @@ Universal aligned な Agent 数、分子はそのうち Universal skill が有�
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
 | `s`                     | save            | 未保存変更を各 Agent の設定へ保存                |
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
+| `?`                     | help            | help view を開く/閉じる                          |
 | `q`                     | quit            | 終了                                             |
 
 Advanced keys:

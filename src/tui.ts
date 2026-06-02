@@ -56,6 +56,7 @@ class SkillTui {
   private message = "";
   private showAllColumns = false;
   private expandFrontmatter = false;
+  private showHelp = false;
   private readonly initialSnapshot?: SkillSnapshot;
 
   constructor(manager: SkillManager, options: TuiOptions) {
@@ -75,8 +76,8 @@ class SkillTui {
 
     this.draw();
     return new Promise((resolve) => {
-      const onKeypress = (_chunk: string, key: readline.Key) => {
-        if (this.handleKey(key)) {
+      const onKeypress = (chunk: string, key: readline.Key) => {
+        if (this.handleKey(chunk, key)) {
           process.stdin.off("keypress", onKeypress);
           if (process.stdin.isTTY) {
             process.stdin.setRawMode(false);
@@ -106,9 +107,12 @@ class SkillTui {
     this.columns = this.showAllColumns ? [...COLUMNS] : this.activeColumns;
   }
 
-  private handleKey(key: readline.Key): boolean {
+  private handleKey(input: string, key: readline.Key): boolean {
     if (key.ctrl && key.name === "c") {
       return true;
+    }
+    if (this.showHelp) {
+      return this.handleHelpKey(input, key);
     }
     if (this.installPlan) {
       return this.handleInstallConfirmation(key);
@@ -152,8 +156,21 @@ class SkillTui {
       this.toggleColumnView();
     } else if (key.name === "f") {
       this.toggleFrontmatterExpansion();
+    } else if (this.isQuestionKey(input, key)) {
+      this.showHelp = true;
     }
     return false;
+  }
+
+  private handleHelpKey(input: string, key: readline.Key): boolean {
+    if (key.name === "q" || key.name === "escape" || this.isQuestionKey(input, key)) {
+      this.showHelp = false;
+    }
+    return false;
+  }
+
+  private isQuestionKey(input: string, key: readline.Key): boolean {
+    return input === "?" || key.sequence === "?";
   }
 
   private toggleFrontmatterExpansion(): void {
@@ -175,6 +192,11 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
+    if (this.showHelp) {
+      this.drawHelp(width, height);
+      return;
+    }
+
     const controlsHeight = 4;
     const footerHeight = 1;
     const baseDetailHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
@@ -197,7 +219,7 @@ class SkillTui {
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
     this.writeLines(
       this.renderBox(
-        "Keys",
+        `Keys ${ANSI.dim}(press ? for help)${ANSI.reset}`,
         [
           `${this.keyText("Space")}=cell | ${this.keyText("Enter")}=row | ${this.keyText("o")}=row on | ${this.keyText("x")}=row off`,
           `${this.keyText("d")}=delete skill | ${this.keyText("i")}=install missing | ${this.keyText("s")}=save | ${this.keyText("r")}=reload | ${this.keyText("q")}=quit`,
@@ -236,6 +258,50 @@ class SkillTui {
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
     this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+  }
+
+  private drawHelp(width: number, height: number): void {
+    process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
+    this.writeFrame(
+      this.renderBox("Help", this.helpLines(width - 2, height - 2), width, height),
+      width,
+    );
+  }
+
+  private helpLines(width: number, height: number): string[] {
+    return [
+      `${ANSI.bold}Navigation${ANSI.reset}`,
+      this.helpLine("Up/Down, j/k", "move row", width),
+      this.helpLine("Left/Right, h/l", "move column", width),
+      "",
+      `${ANSI.bold}Toggle${ANSI.reset}`,
+      this.helpLine("Space", "toggle selected cell", width),
+      this.helpLine("Enter", "toggle selected row", width),
+      this.helpLine("o / x", "turn selected row on / off", width),
+      "",
+      `${ANSI.bold}Install/Delete${ANSI.reset}`,
+      this.helpLine("i", "install for missing agents", width),
+      this.helpLine("d", "delete skill", width),
+      this.helpLine("y / n", "confirm / cancel install or delete", width),
+      "",
+      `${ANSI.bold}Save${ANSI.reset}`,
+      this.helpLine("s", "save pending changes", width),
+      this.helpLine("r", "reload from disk and clear pending changes", width),
+      "",
+      `${ANSI.bold}View${ANSI.reset}`,
+      this.helpLine("f", "expand / collapse frontmatter", width),
+      this.helpLine("v", "toggle active / all supported agent columns", width),
+      "",
+      `${ANSI.bold}Quit/Help${ANSI.reset}`,
+      this.helpLine("?", "open / close help", width),
+      this.helpLine("Esc", "close help or cancel prompt", width),
+      this.helpLine("q", "quit; closes help when help is open", width),
+    ].slice(0, height);
+  }
+
+  private helpLine(keys: string, description: string, width: number): string {
+    const keyWidth = Math.min(20, Math.max(10, Math.floor(width * 0.28)));
+    return `${this.padVisible(this.keyText(keys), keyWidth)} ${description}`;
   }
 
   private keyText(text: string): string {
@@ -480,6 +546,17 @@ class SkillTui {
   private writeLines(lines: string[], width: number): void {
     for (const line of lines) {
       this.writeLine(line, width);
+    }
+  }
+
+  private writeFrame(lines: string[], width: number): void {
+    const lastIndex = lines.length - 1;
+    for (let index = 0; index < lines.length; index += 1) {
+      if (index === lastIndex) {
+        this.writeFinalLine(lines[index], width);
+      } else {
+        this.writeLine(lines[index], width);
+      }
     }
   }
 

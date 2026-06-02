@@ -175,6 +175,7 @@ numerator is the number of those agents where the Universal skill is enabled.
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
 | `s`                     | save            | Save pending changes                                              |
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
+| `?`                     | help            | Open or close the help view                                       |
 | `q`                     | quit            | Quit                                                              |
 
 Advanced keys:
