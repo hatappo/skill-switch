@@ -19,17 +19,17 @@
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
 `universal` is skill-switch's column for `~/.agents/skills`; installs to it use the
-`universal` gh agent. It is shown at the right edge of the table.
+`universal` gh agent. It is shown at the left edge of the table.
 
 | Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
 | ------------------ | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 | Codex              | `codex`          | `~/.codex/skills`           | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
 | Claude Code        | `claude-code`    | `~/.claude/skills`          | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
 | Cursor             | `cursor`         | `~/.cursor/skills`          | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
 | GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
 | OpenCode           | `opencode`       | `~/.config/opencode/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
-| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 
 Only columns whose user skill folder exists are shown in the TUI and `list`
 output. Row-wide actions and default `install-missing` targets use those active
@@ -138,8 +138,8 @@ During local copy, `SKILL.md` frontmatter is sanitized to keep only Agent Skills
 spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
 `allowed-tools`.
 When multiple installed columns can be used as a source, the first match is used
-in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI, OpenCode, Gemini
-CLI, Universal.
+in this order: Universal, Codex, Claude Code, Cursor, GitHub Copilot CLI,
+OpenCode, Gemini CLI.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.

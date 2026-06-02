@@ -250,8 +250,8 @@ test("activeColumns and formatTable hide columns without skill folders", () => {
   const table = manager.formatTable();
   const header = table.split("\n")[0];
 
-  assert.deepEqual(manager.activeColumns(), ["codex", "universal"]);
-  assert.match(header, /Codex\s+Universal$/);
+  assert.deepEqual(manager.activeColumns(), ["universal", "codex"]);
+  assert.match(header, /Universal\s+Codex\s*$/);
   assert.doesNotMatch(header, /Claude Code|Cursor|Copilot CLI|OpenCode|Gemini CLI/);
 });
 
@@ -412,7 +412,7 @@ test("Universal column can report mixed state", () => {
       ?.status("universal"),
     "mixed",
   );
-  assert.match(new SkillManager(home).formatTable(), /2\/3\s*$/);
+  assert.match(new SkillManager(home).formatTable(), /demo\s+2\/3/);
 });
 
 test("deleteSkill removes skill directories and stale disable settings", () => {
@@ -444,17 +444,17 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
 
   const manager = new SkillManager(home);
   assert.deepEqual(manager.deleteTargets("demo"), [
+    resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
-    resolve(dirname(universalSkill)),
   ]);
 
   const deleted = manager.deleteSkill("demo");
 
   assert.deepEqual(deleted, [
+    resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
-    resolve(dirname(universalSkill)),
   ]);
   assert.equal(existsSync(dirname(universalSkill)), false);
   assert.equal(existsSync(dirname(claudeSkill)), false);

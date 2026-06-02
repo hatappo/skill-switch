@@ -21,7 +21,7 @@ export const AGENTS = [
   "gemini-cli",
 ] as const;
 export const UNIVERSAL = "universal";
-export const COLUMNS = [...AGENTS, UNIVERSAL] as const;
+export const COLUMNS = [UNIVERSAL, ...AGENTS] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type ColumnName = (typeof COLUMNS)[number];
 export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter((agent) => agent !== "claude-code") as Exclude<
