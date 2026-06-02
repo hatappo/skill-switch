@@ -231,7 +231,7 @@ class SkillTui {
     );
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
-    this.writeLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+    this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
   }
 
   private descriptionLines(width: number, height: number): string[] {
@@ -318,10 +318,18 @@ class SkillTui {
   }
 
   private writeLine(text: string, width: number, bold = false): void {
+    process.stdout.write(`${this.renderLine(text, width, bold)}\n`);
+  }
+
+  private writeFinalLine(text: string, width: number, bold = false): void {
+    process.stdout.write(this.renderLine(text, width, bold));
+  }
+
+  private renderLine(text: string, width: number, bold = false): string {
     const visible = this.stripAnsi(text);
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
-    process.stdout.write(`${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}\n`);
+    return `${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}`;
   }
 
   private padVisible(text: string, width: number): string {
