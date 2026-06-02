@@ -167,36 +167,46 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
+    const controlsHeight = 4;
+    const footerHeight = 1;
+    const descriptionHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
+    const skillsHeight = Math.max(3, height - controlsHeight - descriptionHeight - footerHeight);
+    const tableHeight = Math.max(0, skillsHeight - 3);
     const agentColumnsWidth = this.columns.reduce(
       (total, column) => total + 2 + COLUMN_WIDTHS[column],
       0,
     );
-    const nameWidth = Math.max(12, Math.min(42, width - agentColumnsWidth));
-    const visibleHeight = Math.max(0, height - 5);
+    const nameWidth = Math.max(12, Math.min(42, width - 4 - agentColumnsWidth));
     const top = Math.min(
-      Math.max(0, this.rowIndex - visibleHeight + 1),
-      Math.max(0, this.rows.length - visibleHeight),
+      Math.max(0, this.rowIndex - tableHeight + 1),
+      Math.max(0, this.rows.length - tableHeight),
     );
 
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
-    this.writeLine("skill-switch | Space=cell | t=toggle row | o=row on | x=row off", width, true);
-    this.writeLine(
-      "        | d=delete skill | i=install missing | a=apply | r=reload | q=quit",
+    this.writeLines(
+      this.renderBox(
+        "skill-switch",
+        [
+          "Space=cell | t=toggle row | o=row on | x=row off",
+          "d=delete skill | i=install missing | a=apply | r=reload | q=quit",
+        ],
+        width,
+        controlsHeight,
+      ),
       width,
-      true,
     );
-    this.writeLine(
+
+    const tableLines = [
       [
         "Skill".padEnd(nameWidth),
         ...this.columns.map((column) => this.renderColumnHeader(column)),
       ].join("  "),
-      width,
-    );
+    ];
 
-    for (let offset = 0; offset < visibleHeight; offset += 1) {
+    for (let offset = 0; offset < tableHeight - 1; offset += 1) {
       const row = this.rows[top + offset];
       if (!row) {
-        this.writeLine("", width);
+        tableLines.push("");
         continue;
       }
       const selectedRow = top + offset === this.rowIndex;
@@ -206,11 +216,105 @@ class SkillTui {
         const selectedCell = selectedRow && column === this.columns[this.agentIndex];
         line += `  ${this.renderStatusCell(row, column, selectedCell, COLUMN_WIDTHS[column])}`;
       }
-      this.writeLine(line, width);
+      tableLines.push(line);
     }
+    this.writeLines(this.renderBox("Skills", tableLines, width, skillsHeight), width);
+
+    this.writeLines(
+      this.renderBox(
+        "Description",
+        this.descriptionLines(width - 4, descriptionHeight - 2),
+        width,
+        descriptionHeight,
+      ),
+      width,
+    );
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
     this.writeLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+  }
+
+  private descriptionLines(width: number, height: number): string[] {
+    const row = this.currentRow();
+    if (!row) {
+      return ["No skill selected."];
+    }
+
+    const column = this.columns[this.agentIndex];
+    if (!column) {
+      return [`${ANSI.bold}${row.name}${ANSI.reset}`, `${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    const description = row.description(column);
+    const label = COLUMN_LABELS[column];
+    const contentLines =
+      description === null
+        ? [`${ANSI.dim}Not installed${ANSI.reset}`]
+        : description
+          ? this.wrapText(description, width)
+          : [`${ANSI.dim}(no description)${ANSI.reset}`];
+    return [
+      `${ANSI.bold}${row.name}${ANSI.reset}  ${ANSI.dim}${label}${ANSI.reset}`,
+      ...contentLines,
+    ].slice(0, height);
+  }
+
+  private wrapText(text: string, width: number): string[] {
+    if (width <= 0) {
+      return [""];
+    }
+
+    const lines: string[] = [];
+    for (const paragraph of text.split(/\r?\n/)) {
+      let current = "";
+      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+        if (word.length > width) {
+          if (current) {
+            lines.push(current);
+            current = "";
+          }
+          for (let index = 0; index < word.length; index += width) {
+            lines.push(word.slice(index, index + width));
+          }
+          continue;
+        }
+
+        const next = current ? `${current} ${word}` : word;
+        if (next.length > width) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = next;
+        }
+      }
+      if (current || paragraph === "") {
+        lines.push(current);
+      }
+    }
+    return lines.length > 0 ? lines : [""];
+  }
+
+  private renderBox(title: string, lines: string[], width: number, height: number): string[] {
+    const boxWidth = Math.max(2, width);
+    const innerWidth = Math.max(0, boxWidth - 2);
+    const contentHeight = Math.max(0, height - 2);
+    const safeTitle = ` ${title} `;
+    const titleWidth = Math.min(safeTitle.length, innerWidth);
+    const top =
+      `┌${safeTitle.slice(0, titleWidth)}` + `${"─".repeat(Math.max(0, innerWidth - titleWidth))}┐`;
+    const bottom = `└${"─".repeat(innerWidth)}┘`;
+    const rendered = [top];
+    for (let index = 0; index < contentHeight; index += 1) {
+      rendered.push(`│${this.padVisible(lines[index] ?? "", innerWidth)}│`);
+    }
+    rendered.push(bottom);
+    return rendered;
+  }
+
+  private writeLines(lines: string[], width: number): void {
+    for (const line of lines) {
+      this.writeLine(line, width);
+    }
   }
 
   private writeLine(text: string, width: number, bold = false): void {
@@ -218,6 +322,13 @@ class SkillTui {
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
     process.stdout.write(`${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}\n`);
+  }
+
+  private padVisible(text: string, width: number): string {
+    const visible = this.stripAnsi(text);
+    const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
+    const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
+    return `${rendered}${padding}`;
   }
 
   private renderColumnHeader(column: ColumnName): string {

@@ -241,6 +241,20 @@ test("SkillManager matches skills by name across agents", () => {
   assert.equal(rows[0].status("cursor"), "off");
 });
 
+test("SkillRow exposes the selected column description without fallback", () => {
+  const home = tmpHome();
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
+  writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo");
+  ensureDir(dirname(codexSkill));
+  writeFileSync(codexSkill, "---\nname: demo\n---\n\n# demo\n", "utf8");
+
+  const [row] = new SkillManager(home).scan();
+
+  assert.equal(row?.description("codex"), "");
+  assert.equal(row?.description("claude-code"), "Test skill");
+  assert.equal(row?.description("cursor"), null);
+});
+
 test("activeColumns and formatTable hide columns without skill folders", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");

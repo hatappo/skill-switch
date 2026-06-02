@@ -207,6 +207,7 @@ export class SkillInstance {
   readonly path: string;
   readonly enabled: boolean;
   readonly provenance: SkillProvenance | null;
+  readonly description: string;
 
   constructor(
     agent: ColumnName,
@@ -215,6 +216,7 @@ export class SkillInstance {
     enabled: boolean,
     provenance: SkillProvenance | null = null,
     targetAgent: AgentName | null = null,
+    description = "",
   ) {
     this.agent = agent;
     this.targetAgent = targetAgent;
@@ -222,6 +224,7 @@ export class SkillInstance {
     this.path = path;
     this.enabled = enabled;
     this.provenance = provenance;
+    this.description = description;
   }
 
   toJSON(): Record<string, unknown> {
@@ -232,6 +235,7 @@ export class SkillInstance {
       enabled: this.enabled,
       provenance: this.provenance,
       targetAgent: this.targetAgent,
+      description: this.description,
     };
   }
 }
@@ -281,6 +285,21 @@ export class SkillRow {
       return `${enabledCount}/${items.length}`;
     }
     return formatStatus(this.status(column));
+  }
+
+  description(column: ColumnName): string | null {
+    const instances = this.instances[column];
+    if (instances.length === 0) {
+      return null;
+    }
+
+    for (const instance of instances) {
+      const description = instance.description.trim();
+      if (description) {
+        return description;
+      }
+    }
+    return "";
   }
 
   toJSON(columns: ColumnName[] = [...COLUMNS]): Record<string, unknown> {
@@ -773,6 +792,8 @@ class CodexAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("codex", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
         );
       }),
     );
@@ -816,6 +837,8 @@ class ClaudeAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("claude-code", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
       );
     });
   }
@@ -872,6 +895,8 @@ class CursorAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("cursor", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
       );
     });
   }
@@ -915,6 +940,8 @@ class CopilotAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("github-copilot", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
         );
       }),
     );
@@ -968,6 +995,8 @@ class OpenCodeAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("opencode", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
         );
       }),
     );
@@ -1026,6 +1055,8 @@ class GeminiAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("gemini-cli", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
       );
     });
   }
@@ -1166,6 +1197,7 @@ export class SkillManager {
           this.adapters[agent].isEnabled(instance),
           provenance,
           agent,
+          values.description,
         );
       });
     });
