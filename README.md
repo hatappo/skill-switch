@@ -158,6 +158,10 @@ Status colors:
 | `-`            | Dim gray           |
 | Unsaved change | Bold cyan with `*` |
 
+For Universal mixed state, the status is shown as `enabled/total`, such as
+`2/3`. The denominator is the number of active Universal-aligned agents, and the
+numerator is the number of those agents where the Universal skill is enabled.
+
 | Key                     | Command         | Action                                                            |
 | ----------------------- | --------------- | ----------------------------------------------------------------- |
 | `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |

@@ -4,8 +4,8 @@ import {
   COLUMN_LABELS,
   COLUMN_WIDTHS,
   COLUMNS,
+  type AgentName,
   type ColumnName,
-  formatStatus,
   type InstallAction,
   SkillManager,
   type SkillSnapshot,
@@ -13,7 +13,7 @@ import {
 } from "./core.ts";
 
 type PendingKey = `${string}\0${ColumnName}`;
-type DisplayStatus = "ON" | "OFF" | "MIX" | "-";
+type DisplayStatus = string;
 type InstallPlan = {
   skill: string;
   actions: InstallAction[];
@@ -47,6 +47,7 @@ class SkillTui {
   private rows: SkillRow[] = [];
   private columns: ColumnName[] = [];
   private activeColumns: ColumnName[] = [];
+  private activeUniversalTargetAgents: AgentName[] = [];
   private rowIndex = 0;
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
@@ -100,6 +101,7 @@ class SkillTui {
 
   private refreshColumns(): void {
     this.activeColumns = this.manager.activeColumns();
+    this.activeUniversalTargetAgents = this.manager.activeUniversalTargetAgents();
     this.columns = this.showAllColumns ? [...COLUMNS] : this.activeColumns;
   }
 
@@ -283,7 +285,7 @@ class SkillTui {
     if (staged !== undefined) {
       return staged ? "ON" : "OFF";
     }
-    return formatStatus(row.status(column)) as DisplayStatus;
+    return row.statusLabel(column, this.activeUniversalTargetAgents);
   }
 
   private renderStatusCell(
@@ -310,6 +312,9 @@ class SkillTui {
       return ANSI.red;
     }
     if (status === "MIX") {
+      return ANSI.yellow;
+    }
+    if (/^\d+\/\d+$/.test(status)) {
       return ANSI.yellow;
     }
     return ANSI.dim;

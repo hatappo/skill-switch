@@ -202,6 +202,7 @@ export function checkGhCommand(command = "gh"): string | null {
 
 export class SkillInstance {
   readonly agent: ColumnName;
+  readonly targetAgent: AgentName | null;
   readonly name: string;
   readonly path: string;
   readonly enabled: boolean;
@@ -213,8 +214,10 @@ export class SkillInstance {
     path: string,
     enabled: boolean,
     provenance: SkillProvenance | null = null,
+    targetAgent: AgentName | null = null,
   ) {
     this.agent = agent;
+    this.targetAgent = targetAgent;
     this.name = name;
     this.path = path;
     this.enabled = enabled;
@@ -228,6 +231,7 @@ export class SkillInstance {
       path: this.path,
       enabled: this.enabled,
       provenance: this.provenance,
+      targetAgent: this.targetAgent,
     };
   }
 }
@@ -253,6 +257,30 @@ export class SkillRow {
       return "off";
     }
     return "mixed";
+  }
+
+  statusLabel(
+    column: ColumnName,
+    universalTargetAgents: AgentName[] = [...UNIVERSAL_TARGET_AGENTS],
+  ): string {
+    if (column === UNIVERSAL) {
+      const targetAgentSet = new Set(universalTargetAgents);
+      const items = this.instances[column].filter(
+        (item) => item.targetAgent === null || targetAgentSet.has(item.targetAgent),
+      );
+      if (items.length === 0) {
+        return "-";
+      }
+      const enabledCount = items.filter((item) => item.enabled).length;
+      if (enabledCount === items.length) {
+        return "ON";
+      }
+      if (enabledCount === 0) {
+        return "OFF";
+      }
+      return `${enabledCount}/${items.length}`;
+    }
+    return formatStatus(this.status(column));
   }
 
   toJSON(columns: ColumnName[] = [...COLUMNS]): Record<string, unknown> {
@@ -1114,6 +1142,11 @@ export class SkillManager {
     return COLUMNS.filter((column) => isDirectory(this.skillRoot(column)));
   }
 
+  activeUniversalTargetAgents(): AgentName[] {
+    const active = new Set(this.activeColumns());
+    return UNIVERSAL_TARGET_AGENTS.filter((agent) => active.has(agent));
+  }
+
   skillRoot(column: ColumnName): string {
     const parts = column === UNIVERSAL ? UNIVERSAL_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[column];
     return join(this.home, ...parts);
@@ -1132,6 +1165,7 @@ export class SkillManager {
           path,
           this.adapters[agent].isEnabled(instance),
           provenance,
+          agent,
         );
       });
     });
@@ -1387,7 +1421,11 @@ export class SkillManager {
     }
   }
 
-  formatTable(rows = this.scan(), columns = this.activeColumns()): string {
+  formatTable(
+    rows = this.scan(),
+    columns = this.activeColumns(),
+    universalTargetAgents = this.activeUniversalTargetAgents(),
+  ): string {
     const nameWidth = Math.max("Skill".length, ...rows.map((row) => row.name.length));
     const lines = [
       [
@@ -1399,7 +1437,7 @@ export class SkillManager {
       ),
     ];
     for (const row of rows) {
-      const values = columns.map((column) => formatStatus(row.status(column)));
+      const values = columns.map((column) => row.statusLabel(column, universalTargetAgents));
       lines.push(
         [
           row.name.padEnd(nameWidth),

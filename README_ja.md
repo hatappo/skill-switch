@@ -152,6 +152,9 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `-`        | グレー               |
 | 未保存変更 | `*` 付きの太字シアン |
 
+Universal が mixed の場合は `2/3` のように `enabled/total` で表示します。分母は active かつ
+Universal aligned な Agent 数、分子はそのうち Universal skill が有効な Agent 数です。
+
 キー操作:
 
 | Key                     | コマンド        | 動作                                             |

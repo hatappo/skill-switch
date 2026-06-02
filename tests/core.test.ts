@@ -398,6 +398,9 @@ test("Universal column applies settings to Universal-compatible agents only", ()
 test("Universal column can report mixed state", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
+  ensureDir(join(home, ".codex", "skills"));
+  ensureDir(join(home, ".cursor", "skills"));
+  ensureDir(join(home, ".copilot", "skills"));
   const copilotSettings = join(home, ".copilot", "settings.json");
   ensureDir(dirname(copilotSettings));
   writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
@@ -409,6 +412,7 @@ test("Universal column can report mixed state", () => {
       ?.status("universal"),
     "mixed",
   );
+  assert.match(new SkillManager(home).formatTable(), /2\/3\s*$/);
 });
 
 test("deleteSkill removes skill directories and stale disable settings", () => {
