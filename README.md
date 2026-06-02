@@ -2,11 +2,11 @@
   en | <a href="./README_ja.md">ja</a>
 </p>
 
-# skwitch
+# skill-switch
 
-`skwitch` is a TUI for switching AI agent skills across agents.
+`skill-switch` is a TUI for switching AI agent skills across agents.
 
-![skwitch TUI screenshot](./docs/img/screenshot-tui.png)
+![skill-switch TUI screenshot](./docs/img/screenshot-tui.png)
 
 ## Features
 
@@ -18,7 +18,7 @@
 ## Supported agents
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
-`universal` is skwitch's column for `~/.agents/skills`; installs to it use the
+`universal` is skill-switch's column for `~/.agents/skills`; installs to it use the
 `universal` gh agent. It is shown at the right edge of the table.
 
 | Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
@@ -79,11 +79,11 @@ Universal toggle targets:
 
 ## Usage
 
-Install it locally if you want the `skwitch` command:
+Install it locally if you want the `skill-switch` command:
 
 ```bash
 pnpm link --global
-skwitch
+skill-switch
 ```
 
 Or run it directly from the repository:
@@ -166,7 +166,7 @@ Status colors:
 | `t`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
 | `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
 | `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
-| `d`                     | delete row      | Delete the selected skill row across all agents where it exists   |
+| `d`                     | delete skill    | Delete the selected skill across all agents where it exists       |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
 | `a`                     | apply           | Apply pending changes                                             |

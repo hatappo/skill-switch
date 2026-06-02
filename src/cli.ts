@@ -45,16 +45,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 function usage(): string {
   return [
     "Usage:",
-    "  skwitch [--home PATH] [tui]",
-    "  skwitch help",
-    "  skwitch version",
+    "  skill-switch [--home PATH] [tui]",
+    "  skill-switch help",
+    "  skill-switch version",
     "",
     "Advanced:",
-    "  skwitch [--home PATH] list [--format table|json]",
-    "  skwitch [--home PATH] export",
-    "  skwitch [--home PATH] import <snapshot.json>",
-    "  skwitch [--home PATH] apply <snapshot.json>",
-    "  skwitch [--home PATH] install-missing <skill> [agent|universal|all]... [--execute]",
+    "  skill-switch [--home PATH] list [--format table|json]",
+    "  skill-switch [--home PATH] export",
+    "  skill-switch [--home PATH] import <snapshot.json>",
+    "  skill-switch [--home PATH] apply <snapshot.json>",
+    "  skill-switch [--home PATH] install-missing <skill> [agent|universal|all]... [--execute]",
   ].join("\n");
 }
 

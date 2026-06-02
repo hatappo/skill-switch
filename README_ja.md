@@ -2,11 +2,11 @@
   <a href="./README.md">en</a> | ja
 </p>
 
-# skwitch
+# skill-switch
 
-`skwitch` は、複数の Agent Skill の有効/無効をエージェント横断でまとめて切り替える TUI です。
+`skill-switch` は、複数の Agent Skill の有効/無効をエージェント横断でまとめて切り替える TUI です。
 
-![skwitch TUI screenshot](./docs/img/screenshot-tui.png)
+![skill-switch TUI screenshot](./docs/img/screenshot-tui.png)
 
 ## 特長
 
@@ -18,7 +18,7 @@
 ## 対応 Agent
 
 Agent ID は `gh skill install --help` の括弧内の名称に合わせています。
-`universal` は skwitch 内で `~/.agents/skills` を表す列です。この列への install は gh の
+`universal` は skill-switch 内で `~/.agents/skills` を表す列です。この列への install は gh の
 `universal` agent を使います。表では右端に表示されます。
 
 | Agent              | ID               | User skill folders          | 反映先                                                                          |
@@ -76,11 +76,11 @@ Universal toggle の対象:
 
 ## 使い方
 
-`skwitch` コマンドとして使いたい場合:
+`skill-switch` コマンドとして使いたい場合:
 
 ```bash
 pnpm link --global
-skwitch
+skill-switch
 ```
 
 リポジトリから直接起動する場合:
@@ -162,7 +162,7 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `t`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
 | `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
 | `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
-| `d`                     | delete row      | 選択中の skill 行を、存在する Agent 全体で削除   |
+| `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除     |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
 | `a`                     | apply           | 未保存変更を各 Agent の設定へ反映                |

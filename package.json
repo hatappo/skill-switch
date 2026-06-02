@@ -1,5 +1,5 @@
 {
-  "name": "skwitch",
+  "name": "skill-switch",
   "version": "0.1.0",
   "description": "TUI for switching AI agent skills across agents.",
   "keywords": [
@@ -23,7 +23,7 @@
     "url": "git+https://github.com/hatappo/skill-switch.git"
   },
   "bin": {
-    "skwitch": "./src/cli.ts"
+    "skill-switch": "./src/cli.ts"
   },
   "files": [
     "src",
