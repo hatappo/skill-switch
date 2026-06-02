@@ -124,7 +124,7 @@ missing states are omitted.
 ```
 
 `import skills.json` opens the TUI with snapshot differences loaded as pending
-changes. Review them, then press `a` to apply. `apply skills.json` applies the
+changes. Review them, then press `s` to save. `apply skills.json` applies the
 same snapshot directly without opening the TUI, which is useful for dotfiles and
 bootstrap scripts.
 
@@ -167,13 +167,13 @@ numerator is the number of those agents where the Universal skill is enabled.
 | `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |
 | `Left`/`Right`, `h`/`l` | move column     | Move between agent columns                                        |
 | `Space`                 | toggle cell     | Toggle the selected skill for the selected agent                  |
-| `t`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
+| `Enter`                 | toggle row      | Toggle the selected skill row across all agents where it exists   |
 | `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
 | `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
 | `d`                     | delete skill    | Delete the selected skill across all agents where it exists       |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
-| `a`                     | apply           | Apply pending changes                                             |
+| `s`                     | save            | Save pending changes                                              |
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
 | `q`                     | quit            | Quit                                                              |
 

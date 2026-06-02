@@ -118,7 +118,7 @@ class SkillTui {
     }
     if (key.name === "q" || key.name === "escape") {
       if (this.pending.size > 0) {
-        this.message = "Pending changes remain. Press a to apply or r to discard.";
+        this.message = "Pending changes remain. Press s to save or r to discard.";
         return false;
       }
       return true;
@@ -133,14 +133,14 @@ class SkillTui {
       this.agentIndex = Math.min(Math.max(0, this.columns.length - 1), this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
-    } else if (key.name === "t") {
+    } else if (key.name === "return" || key.name === "enter") {
       this.toggleRow();
     } else if (key.name === "o") {
       this.setRow(true);
     } else if (key.name === "x") {
       this.setRow(false);
-    } else if (key.name === "a") {
-      this.apply();
+    } else if (key.name === "s") {
+      this.save();
     } else if (key.name === "r") {
       this.pending.clear();
       this.reload();
@@ -199,8 +199,8 @@ class SkillTui {
       this.renderBox(
         "Keys",
         [
-          "Space=cell | t=toggle row | o=row on | x=row off",
-          "d=delete skill | i=install missing | a=apply | r=reload | q=quit",
+          `${this.keyText("Space")}=cell | ${this.keyText("Enter")}=row | ${this.keyText("o")}=row on | ${this.keyText("x")}=row off`,
+          `${this.keyText("d")}=delete skill | ${this.keyText("i")}=install missing | ${this.keyText("s")}=save | ${this.keyText("r")}=reload | ${this.keyText("q")}=quit`,
         ],
         width,
         controlsHeight,
@@ -236,6 +236,10 @@ class SkillTui {
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
     this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+  }
+
+  private keyText(text: string): string {
+    return `${ANSI.bold}${text}${ANSI.reset}`;
   }
 
   private detailPaneLines(width: number, height: number): string[] {
@@ -390,9 +394,11 @@ class SkillTui {
 
   private frontmatterTitleSuffix(hiddenCount: number): string | null {
     if (this.expandFrontmatter) {
-      return hiddenCount > 0 ? `(+${hiddenCount} more, f collapse)` : "(f collapse)";
+      return hiddenCount > 0
+        ? `(+${hiddenCount} more; press f to collapse)`
+        : "(press f to collapse)";
     }
-    return hiddenCount > 0 ? `(+${hiddenCount} more, f expand)` : null;
+    return hiddenCount > 0 ? `(+${hiddenCount} more; press f to expand)` : null;
   }
 
   private detailPaneTitle(label: string, innerWidth: number, suffix: string | null): string {
@@ -672,7 +678,7 @@ class SkillTui {
     this.message = `Staged ${row.name} across installed columns -> ${enabled ? "on" : "off"}.`;
   }
 
-  private apply(): void {
+  private save(): void {
     let changed = 0;
     for (const [key, enabled] of this.pending) {
       const [skill, agent] = key.split("\0") as [string, ColumnName];
@@ -680,7 +686,7 @@ class SkillTui {
     }
     this.pending.clear();
     this.reload();
-    this.message = `Applied ${changed} agent changes.`;
+    this.message = `Saved ${changed} agent changes.`;
   }
 
   private importSnapshot(snapshot: SkillSnapshot): void {

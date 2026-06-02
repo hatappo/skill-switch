@@ -121,7 +121,7 @@ missing 状態は省略します。
 ```
 
 `import skills.json` は snapshot との差分を未適用変更として読み込んだ状態で TUI を開きます。
-確認してから `a` で apply できます。`apply skills.json` は TUI を開かずに同じ snapshot を
+確認してから `s` で save できます。`apply skills.json` は TUI を開かずに同じ snapshot を
 直接反映するため、dotfiles や bootstrap script に向いています。
 
 `install-missing` は、既にインストール済みの skill の `SKILL.md` から
@@ -162,13 +162,13 @@ Universal aligned な Agent 数、分子はそのうち Universal skill が有�
 | `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                   |
 | `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                   |
 | `Space`                 | toggle cell     | 選択中のセルだけ On/Off                          |
-| `t`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
+| `Enter`                 | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
 | `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
 | `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
 | `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除     |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
-| `a`                     | apply           | 未保存変更を各 Agent の設定へ反映                |
+| `s`                     | save            | 未保存変更を各 Agent の設定へ保存                |
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
 | `q`                     | quit            | 終了                                             |
 
