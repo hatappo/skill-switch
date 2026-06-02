@@ -38,10 +38,13 @@ function ensureDir(path: string): void {
 }
 
 test("parseFrontmatter parses simple YAML frontmatter", () => {
-  const parsed = parseFrontmatter("---\nname: test\ndescription: Hi\n---\nBody\n");
+  const parsed = parseFrontmatter(
+    "---\nname: test\ndescription: Hi\nmetadata:\n  github-path: skills/test\n---\nBody\n",
+  );
   assert.equal(parsed.values.name, "test");
   assert.equal(parsed.values.description, "Hi");
-  assert.deepEqual(parsed.bounds, [0, 3]);
+  assert.equal(parsed.values["metadata.github-path"], "skills/test");
+  assert.deepEqual(parsed.bounds, [0, 5]);
 });
 
 test("provenanceFromFrontmatter reads GitHub metadata", () => {
@@ -241,6 +244,25 @@ test("SkillManager matches skills by name across agents", () => {
   assert.equal(rows[0].status("cursor"), "off");
 });
 
+test("SkillRow exposes the selected column description without fallback", () => {
+  const home = tmpHome();
+  const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
+  writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo", "allowed-tools: Read\n");
+  ensureDir(dirname(codexSkill));
+  writeFileSync(codexSkill, "---\nname: demo\n---\n\n# demo\n", "utf8");
+
+  const [row] = new SkillManager(home).scan();
+
+  assert.equal(row?.description("codex"), "");
+  assert.equal(row?.description("claude-code"), "Test skill");
+  assert.equal(row?.description("cursor"), null);
+  assert.deepEqual(row?.frontmatter("codex"), { name: "demo" });
+  assert.equal(row?.frontmatter("claude-code")?.["allowed-tools"], "Read");
+  assert.equal(row?.frontmatter("cursor"), null);
+  assert.equal(row?.path("codex"), codexSkill);
+  assert.equal(row?.path("cursor"), null);
+});
+
 test("activeColumns and formatTable hide columns without skill folders", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
@@ -250,8 +272,8 @@ test("activeColumns and formatTable hide columns without skill folders", () => {
   const table = manager.formatTable();
   const header = table.split("\n")[0];
 
-  assert.deepEqual(manager.activeColumns(), ["codex", "universal"]);
-  assert.match(header, /Codex\s+Universal$/);
+  assert.deepEqual(manager.activeColumns(), ["universal", "codex"]);
+  assert.match(header, /Universal\s+Codex\s*$/);
   assert.doesNotMatch(header, /Claude Code|Cursor|Copilot CLI|OpenCode|Gemini CLI/);
 });
 
@@ -412,7 +434,7 @@ test("Universal column can report mixed state", () => {
       ?.status("universal"),
     "mixed",
   );
-  assert.match(new SkillManager(home).formatTable(), /2\/3\s*$/);
+  assert.match(new SkillManager(home).formatTable(), /demo\s+2\/3/);
 });
 
 test("deleteSkill removes skill directories and stale disable settings", () => {
@@ -444,17 +466,17 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
 
   const manager = new SkillManager(home);
   assert.deepEqual(manager.deleteTargets("demo"), [
+    resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
-    resolve(dirname(universalSkill)),
   ]);
 
   const deleted = manager.deleteSkill("demo");
 
   assert.deepEqual(deleted, [
+    resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
-    resolve(dirname(universalSkill)),
   ]);
   assert.equal(existsSync(dirname(universalSkill)), false);
   assert.equal(existsSync(dirname(claudeSkill)), false);

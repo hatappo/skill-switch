@@ -19,17 +19,17 @@
 
 Agent ID は `gh skill install --help` の括弧内の名称に合わせています。
 `universal` は skill-switch 内で `~/.agents/skills` を表す列です。この列への install は gh の
-`universal` agent を使います。表では右端に表示されます。
+`universal` agent を使います。表では左端に表示されます。
 
 | Agent              | ID               | User skill folders          | 反映先                                                                          |
 | ------------------ | ---------------- | --------------------------- | ------------------------------------------------------------------------------- |
+| Universal          | `universal`      | `~/.agents/skills`          | Claude Code 以外の Universal 対応 Agent 向け設定をまとめて書き込み              |
 | Codex              | `codex`          | `~/.codex/skills`           | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
 | Claude Code        | `claude-code`    | `~/.claude/skills`          | `~/.claude/settings.json` の `skillOverrides` を書き込み                        |
 | Cursor             | `cursor`         | `~/.cursor/skills`          | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み     |
 | GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | `~/.copilot/settings.json` の `disabledSkills` を書き込み                       |
 | OpenCode           | `opencode`       | `~/.config/opencode/skills` | `~/.config/opencode/opencode.json` の `permission.skill` を書き込み             |
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | `~/.gemini/settings.json` の `skills.disabled` を書き込み                       |
-| Universal          | `universal`      | `~/.agents/skills`          | Claude Code 以外の Universal 対応 Agent 向け設定をまとめて書き込み              |
 
 TUI と `list` では、user skill folder が存在する列だけを表示します。行全体への操作と
 デフォルトの `install-missing` 対象も、その active な列だけです。bootstrap 用途では
@@ -121,7 +121,7 @@ missing 状態は省略します。
 ```
 
 `import skills.json` は snapshot との差分を未適用変更として読み込んだ状態で TUI を開きます。
-確認してから `a` で apply できます。`apply skills.json` は TUI を開かずに同じ snapshot を
+確認してから `s` で save できます。`apply skills.json` は TUI を開かずに同じ snapshot を
 直接反映するため、dotfiles や bootstrap script に向いています。
 
 `install-missing` は、既にインストール済みの skill の `SKILL.md` から
@@ -132,8 +132,8 @@ GitHub provenance がない場合は、既存の local skill directory を missi
 user skill folder へコピーします。
 local copy 時は `SKILL.md` frontmatter を sanitize し、Agent Skills spec の field である
 `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` だけを残します。
-複数の列をインストール元として使える場合は、Codex、Claude Code、Cursor、
-GitHub Copilot CLI、OpenCode、Gemini CLI、Universal の順で最初に見つかったものを使います。
+複数の列をインストール元として使える場合は、Universal、Codex、Claude Code、Cursor、
+GitHub Copilot CLI、OpenCode、Gemini CLI の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
@@ -162,20 +162,22 @@ Universal aligned な Agent 数、分子はそのうち Universal skill が有�
 | `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                   |
 | `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                   |
 | `Space`                 | toggle cell     | 選択中のセルだけ On/Off                          |
-| `t`                     | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
+| `Enter`                 | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
 | `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
 | `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
 | `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除     |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
 | `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
-| `a`                     | apply           | 未保存変更を各 Agent の設定へ反映                |
+| `s`                     | save            | 未保存変更を各 Agent の設定へ保存                |
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
+| `?`                     | help            | help view を開く/閉じる                          |
 | `q`                     | quit            | 終了                                             |
 
 Advanced keys:
 
 | Key | コマンド    | 動作                                                                                                 |
 | --- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `f` | frontmatter | Frontmatter pane の展開/折りたたみを切り替えます。隠れている残り行数は pane title に表示されます。   |
 | `v` | column view | active な列だけの表示と、supported agent 全列表示を切り替えます。inactive な列名は薄く表示されます。 |
 
 ## 参考

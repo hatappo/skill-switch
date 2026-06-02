@@ -19,17 +19,17 @@
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
 `universal` is skill-switch's column for `~/.agents/skills`; installs to it use the
-`universal` gh agent. It is shown at the right edge of the table.
+`universal` gh agent. It is shown at the left edge of the table.
 
 | Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
 | ------------------ | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 | Codex              | `codex`          | `~/.codex/skills`           | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
 | Claude Code        | `claude-code`    | `~/.claude/skills`          | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
 | Cursor             | `cursor`         | `~/.cursor/skills`          | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
 | GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | Writes `disabledSkills` in `~/.copilot/settings.json`                                  |
 | OpenCode           | `opencode`       | `~/.config/opencode/skills` | Writes `permission.skill` in `~/.config/opencode/opencode.json`                        |
 | Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | Writes `skills.disabled` in `~/.gemini/settings.json`                                  |
-| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code                    |
 
 Only columns whose user skill folder exists are shown in the TUI and `list`
 output. Row-wide actions and default `install-missing` targets use those active
@@ -124,7 +124,7 @@ missing states are omitted.
 ```
 
 `import skills.json` opens the TUI with snapshot differences loaded as pending
-changes. Review them, then press `a` to apply. `apply skills.json` applies the
+changes. Review them, then press `s` to save. `apply skills.json` applies the
 same snapshot directly without opening the TUI, which is useful for dotfiles and
 bootstrap scripts.
 
@@ -138,8 +138,8 @@ During local copy, `SKILL.md` frontmatter is sanitized to keep only Agent Skills
 spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
 `allowed-tools`.
 When multiple installed columns can be used as a source, the first match is used
-in this order: Codex, Claude Code, Cursor, GitHub Copilot CLI, OpenCode, Gemini
-CLI, Universal.
+in this order: Universal, Codex, Claude Code, Cursor, GitHub Copilot CLI,
+OpenCode, Gemini CLI.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
 with `y` to install that skill for every supported agent where it is missing.
@@ -167,20 +167,22 @@ numerator is the number of those agents where the Universal skill is enabled.
 | `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |
 | `Left`/`Right`, `h`/`l` | move column     | Move between agent columns                                        |
 | `Space`                 | toggle cell     | Toggle the selected skill for the selected agent                  |
-| `t`                     | toggle row      | Toggle the selected skill row across all agents where it exists   |
+| `Enter`                 | toggle row      | Toggle the selected skill row across all agents where it exists   |
 | `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
 | `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
 | `d`                     | delete skill    | Delete the selected skill across all agents where it exists       |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
 | `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
-| `a`                     | apply           | Apply pending changes                                             |
+| `s`                     | save            | Save pending changes                                              |
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
+| `?`                     | help            | Open or close the help view                                       |
 | `q`                     | quit            | Quit                                                              |
 
 Advanced keys:
 
 | Key | Command     | Action                                                                                       |
 | --- | ----------- | -------------------------------------------------------------------------------------------- |
+| `f` | frontmatter | Expand or collapse the Frontmatter pane. Remaining hidden lines are shown in the pane title. |
 | `v` | column view | Toggle between active columns and all supported columns. Inactive column headers are dimmed. |
 
 ## References

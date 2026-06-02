@@ -55,6 +55,8 @@ class SkillTui {
   private deletePlan: DeletePlan | null = null;
   private message = "";
   private showAllColumns = false;
+  private expandFrontmatter = false;
+  private showHelp = false;
   private readonly initialSnapshot?: SkillSnapshot;
 
   constructor(manager: SkillManager, options: TuiOptions) {
@@ -74,8 +76,8 @@ class SkillTui {
 
     this.draw();
     return new Promise((resolve) => {
-      const onKeypress = (_chunk: string, key: readline.Key) => {
-        if (this.handleKey(key)) {
+      const onKeypress = (chunk: string, key: readline.Key) => {
+        if (this.handleKey(chunk, key)) {
           process.stdin.off("keypress", onKeypress);
           if (process.stdin.isTTY) {
             process.stdin.setRawMode(false);
@@ -105,9 +107,12 @@ class SkillTui {
     this.columns = this.showAllColumns ? [...COLUMNS] : this.activeColumns;
   }
 
-  private handleKey(key: readline.Key): boolean {
+  private handleKey(input: string, key: readline.Key): boolean {
     if (key.ctrl && key.name === "c") {
       return true;
+    }
+    if (this.showHelp) {
+      return this.handleHelpKey(input, key);
     }
     if (this.installPlan) {
       return this.handleInstallConfirmation(key);
@@ -117,7 +122,7 @@ class SkillTui {
     }
     if (key.name === "q" || key.name === "escape") {
       if (this.pending.size > 0) {
-        this.message = "Pending changes remain. Press a to apply or r to discard.";
+        this.message = "Pending changes remain. Press s to save or r to discard.";
         return false;
       }
       return true;
@@ -132,14 +137,14 @@ class SkillTui {
       this.agentIndex = Math.min(Math.max(0, this.columns.length - 1), this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
-    } else if (key.name === "t") {
+    } else if (key.name === "return" || key.name === "enter") {
       this.toggleRow();
     } else if (key.name === "o") {
       this.setRow(true);
     } else if (key.name === "x") {
       this.setRow(false);
-    } else if (key.name === "a") {
-      this.apply();
+    } else if (key.name === "s") {
+      this.save();
     } else if (key.name === "r") {
       this.pending.clear();
       this.reload();
@@ -149,8 +154,28 @@ class SkillTui {
       this.prepareDelete();
     } else if (key.name === "v") {
       this.toggleColumnView();
+    } else if (key.name === "f") {
+      this.toggleFrontmatterExpansion();
+    } else if (this.isQuestionKey(input, key)) {
+      this.showHelp = true;
     }
     return false;
+  }
+
+  private handleHelpKey(input: string, key: readline.Key): boolean {
+    if (key.name === "q" || key.name === "escape" || this.isQuestionKey(input, key)) {
+      this.showHelp = false;
+    }
+    return false;
+  }
+
+  private isQuestionKey(input: string, key: readline.Key): boolean {
+    return input === "?" || key.sequence === "?";
+  }
+
+  private toggleFrontmatterExpansion(): void {
+    this.expandFrontmatter = !this.expandFrontmatter;
+    this.message = `Frontmatter pane: ${this.expandFrontmatter ? "expanded" : "compact"}.`;
   }
 
   private toggleColumnView(): void {
@@ -167,36 +192,57 @@ class SkillTui {
   private draw(): void {
     const width = process.stdout.columns || 100;
     const height = process.stdout.rows || 30;
+    if (this.showHelp) {
+      this.drawHelp(width, height);
+      return;
+    }
+
+    const controlsHeight = 4;
+    const footerHeight = 1;
+    const baseDetailHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
+    const maxDetailHeight = Math.max(3, height - controlsHeight - footerHeight - 3);
+    const detailHeight = this.expandFrontmatter
+      ? Math.min(maxDetailHeight, Math.max(baseDetailHeight, this.expandedDetailHeight(width)))
+      : baseDetailHeight;
+    const skillsHeight = Math.max(3, height - controlsHeight - detailHeight - footerHeight);
+    const tableHeight = Math.max(0, skillsHeight - 3);
     const agentColumnsWidth = this.columns.reduce(
       (total, column) => total + 2 + COLUMN_WIDTHS[column],
       0,
     );
-    const nameWidth = Math.max(12, Math.min(42, width - agentColumnsWidth));
-    const visibleHeight = Math.max(0, height - 5);
+    const nameWidth = Math.max(12, Math.min(42, width - 4 - agentColumnsWidth));
     const top = Math.min(
-      Math.max(0, this.rowIndex - visibleHeight + 1),
-      Math.max(0, this.rows.length - visibleHeight),
+      Math.max(0, this.rowIndex - tableHeight + 1),
+      Math.max(0, this.rows.length - tableHeight),
     );
 
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
-    this.writeLine("skill-switch | Space=cell | t=toggle row | o=row on | x=row off", width, true);
-    this.writeLine(
-      "        | d=delete skill | i=install missing | a=apply | r=reload | q=quit",
+    this.writeLines(
+      this.renderBox(
+        `Keys ${ANSI.dim}(press ? for help)${ANSI.reset}`,
+        [
+          `${this.keyText("Space")}=cell | ${this.keyText("Enter")}=row | ${this.keyText("o")}=row on | ${this.keyText("x")}=row off`,
+          `${this.keyText("d")}=delete skill | ${this.keyText("i")}=install missing | ${this.keyText("s")}=save | ${this.keyText("r")}=reload | ${this.keyText("q")}=quit`,
+        ],
+        width,
+        controlsHeight,
+      ),
       width,
-      true,
     );
-    this.writeLine(
+
+    this.writeLines(this.detailPaneLines(width, detailHeight), width);
+
+    const tableLines = [
       [
         "Skill".padEnd(nameWidth),
         ...this.columns.map((column) => this.renderColumnHeader(column)),
       ].join("  "),
-      width,
-    );
+    ];
 
-    for (let offset = 0; offset < visibleHeight; offset += 1) {
+    for (let offset = 0; offset < tableHeight - 1; offset += 1) {
       const row = this.rows[top + offset];
       if (!row) {
-        this.writeLine("", width);
+        tableLines.push("");
         continue;
       }
       const selectedRow = top + offset === this.rowIndex;
@@ -206,18 +252,360 @@ class SkillTui {
         const selectedCell = selectedRow && column === this.columns[this.agentIndex];
         line += `  ${this.renderStatusCell(row, column, selectedCell, COLUMN_WIDTHS[column])}`;
       }
-      this.writeLine(line, width);
+      tableLines.push(line);
     }
+    this.writeLines(this.renderBox("Skills", tableLines, width, skillsHeight), width);
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
-    this.writeLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+    this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+  }
+
+  private drawHelp(width: number, height: number): void {
+    process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
+    this.writeFrame(
+      this.renderBox("Help", this.helpLines(width - 2, height - 2), width, height),
+      width,
+    );
+  }
+
+  private helpLines(width: number, height: number): string[] {
+    return [
+      `${ANSI.bold}Navigation${ANSI.reset}`,
+      this.helpLine("Up/Down, j/k", "move row", width),
+      this.helpLine("Left/Right, h/l", "move column", width),
+      "",
+      `${ANSI.bold}Toggle${ANSI.reset}`,
+      this.helpLine("Space", "toggle selected cell", width),
+      this.helpLine("Enter", "toggle selected row", width),
+      this.helpLine("o / x", "turn selected row on / off", width),
+      "",
+      `${ANSI.bold}Install/Delete${ANSI.reset}`,
+      this.helpLine("i", "install for missing agents", width),
+      this.helpLine("d", "delete skill", width),
+      this.helpLine("y / n", "confirm / cancel install or delete", width),
+      "",
+      `${ANSI.bold}Save${ANSI.reset}`,
+      this.helpLine("s", "save pending changes", width),
+      this.helpLine("r", "reload from disk and clear pending changes", width),
+      "",
+      `${ANSI.bold}View${ANSI.reset}`,
+      this.helpLine("f", "expand / collapse frontmatter", width),
+      this.helpLine("v", "toggle active / all supported agent columns", width),
+      "",
+      `${ANSI.bold}Quit/Help${ANSI.reset}`,
+      this.helpLine("?", "open / close help", width),
+      this.helpLine("Esc", "close help or cancel prompt", width),
+      this.helpLine("q", "quit; closes help when help is open", width),
+    ].slice(0, height);
+  }
+
+  private helpLine(keys: string, description: string, width: number): string {
+    const keyWidth = Math.min(20, Math.max(10, Math.floor(width * 0.28)));
+    return `${this.padVisible(this.keyText(keys), keyWidth)} ${description}`;
+  }
+
+  private keyText(text: string): string {
+    return `${ANSI.bold}${text}${ANSI.reset}`;
+  }
+
+  private detailPaneLines(width: number, height: number): string[] {
+    if (width >= 100 && height >= 4) {
+      const [descriptionWidth, frontmatterWidth] = this.detailPaneWidths(width);
+      const frontmatterLines = this.frontmatterPaneLines(frontmatterWidth - 2, height - 2);
+      const hiddenCount = this.hiddenLineCount(
+        this.selectedFrontmatterLinesForWidth(frontmatterWidth - 2),
+        height - 2,
+      );
+      const descriptionBox = this.renderBox(
+        this.descriptionPaneTitle(descriptionWidth - 2),
+        this.descriptionPaneLines(descriptionWidth - 2, height - 2),
+        descriptionWidth,
+        height,
+      );
+      const frontmatterBox = this.renderBox(
+        this.frontmatterPaneTitle(frontmatterWidth - 2, hiddenCount),
+        frontmatterLines,
+        frontmatterWidth,
+        height,
+      );
+      return descriptionBox.map((line, index) => `${line}${frontmatterBox[index] ?? ""}`);
+    }
+
+    if (height < 6) {
+      return this.renderBox(
+        this.descriptionPaneTitle(width - 2),
+        this.descriptionPaneLines(width - 2, height - 2),
+        width,
+        height,
+      );
+    }
+
+    const descriptionHeight = this.expandFrontmatter ? 3 : Math.ceil(height / 2);
+    const frontmatterHeight = height - descriptionHeight;
+    const frontmatterLines = this.frontmatterPaneLines(width - 2, frontmatterHeight - 2);
+    const hiddenCount = this.hiddenLineCount(
+      this.selectedFrontmatterLinesForWidth(width - 2),
+      frontmatterHeight - 2,
+    );
+    return [
+      ...this.renderBox(
+        this.descriptionPaneTitle(width - 2),
+        this.descriptionPaneLines(width - 2, descriptionHeight - 2),
+        width,
+        descriptionHeight,
+      ),
+      ...this.renderBox(
+        this.frontmatterPaneTitle(width - 2, hiddenCount),
+        frontmatterLines,
+        width,
+        frontmatterHeight,
+      ),
+    ];
+  }
+
+  private expandedDetailHeight(width: number): number {
+    if (width >= 100) {
+      const [, frontmatterWidth] = this.detailPaneWidths(width);
+      return this.selectedFrontmatterLinesForWidth(frontmatterWidth - 2).length + 2;
+    }
+
+    return this.selectedFrontmatterLinesForWidth(width - 2).length + 5;
+  }
+
+  private descriptionPaneLines(width: number, height: number): string[] {
+    const row = this.currentRow();
+    if (!row) {
+      return ["No skill selected."];
+    }
+
+    const column = this.columns[this.agentIndex];
+    if (!column) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    const descriptionLines = this.selectedDescriptionLines(row, column, width);
+    return descriptionLines.slice(0, height);
+  }
+
+  private frontmatterPaneLines(width: number, height: number): string[] {
+    const row = this.currentRow();
+    if (!row) {
+      return ["No skill selected."];
+    }
+
+    const column = this.columns[this.agentIndex];
+    if (!column) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    return this.limitPaneLines(this.selectedFrontmatterLines(row, column, width), height);
+  }
+
+  private selectedFrontmatterLinesForWidth(width: number): string[] {
+    const row = this.currentRow();
+    const column = this.columns[this.agentIndex];
+    if (!row || !column) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+    return this.selectedFrontmatterLines(row, column, width);
+  }
+
+  private selectedDescriptionLines(row: SkillRow, column: ColumnName, width: number): string[] {
+    const description = row.description(column);
+    if (description === null) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+    if (!description) {
+      return [`${ANSI.dim}(no description)${ANSI.reset}`];
+    }
+    return this.wrapText(description, width);
+  }
+
+  private selectedFrontmatterLines(row: SkillRow, column: ColumnName, width: number): string[] {
+    const frontmatter = row.frontmatter(column);
+    if (frontmatter === null) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    const lines = Object.entries(frontmatter)
+      .filter(([key, value]) => key !== "name" && key !== "description" && value !== "")
+      .flatMap(([key, value]) => this.wrapText(`${key}: ${value}`, width));
+    return lines.length > 0 ? lines : [`${ANSI.dim}(no frontmatter)${ANSI.reset}`];
+  }
+
+  private limitPaneLines(lines: string[], height: number): string[] {
+    return lines.slice(0, Math.max(0, height));
+  }
+
+  private hiddenLineCount(lines: string[], height: number): number {
+    return Math.max(0, lines.length - Math.max(0, height));
+  }
+
+  private detailPaneWidths(width: number): [number, number] {
+    const descriptionWidth = Math.floor(width * 0.58);
+    return [descriptionWidth, width - descriptionWidth];
+  }
+
+  private descriptionPaneTitle(innerWidth: number): string {
+    const row = this.currentRow();
+    const column = this.columns[this.agentIndex];
+    const path = row && column ? row.path(column) : null;
+    return this.detailPaneTitle("Description", innerWidth, path);
+  }
+
+  private frontmatterPaneTitle(innerWidth: number, hiddenCount: number): string {
+    const suffix = this.frontmatterTitleSuffix(hiddenCount);
+    return this.detailPaneTitle("Frontmatter", innerWidth, suffix);
+  }
+
+  private frontmatterTitleSuffix(hiddenCount: number): string | null {
+    if (this.expandFrontmatter) {
+      return hiddenCount > 0
+        ? `(+${hiddenCount} more; press f to collapse)`
+        : "(press f to collapse)";
+    }
+    return hiddenCount > 0 ? `(+${hiddenCount} more; press f to expand)` : null;
+  }
+
+  private detailPaneTitle(label: string, innerWidth: number, suffix: string | null): string {
+    if (!suffix) {
+      return label;
+    }
+
+    const available = innerWidth - label.length - 3;
+    if (available < 8) {
+      return label;
+    }
+    const suffixText =
+      label === "Description" ? this.truncateStart(suffix, available) : suffix.slice(0, available);
+    return `${label}  ${ANSI.dim}${suffixText}${ANSI.reset}`;
+  }
+
+  private truncateStart(text: string, width: number): string {
+    if (text.length <= width) {
+      return text;
+    }
+    if (width <= 1) {
+      return "…".slice(0, width);
+    }
+    return `…${text.slice(-(width - 1))}`;
+  }
+
+  private wrapText(text: string, width: number): string[] {
+    if (width <= 0) {
+      return [""];
+    }
+
+    const lines: string[] = [];
+    for (const paragraph of text.split(/\r?\n/)) {
+      let current = "";
+      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+        if (word.length > width) {
+          if (current) {
+            lines.push(current);
+            current = "";
+          }
+          for (let index = 0; index < word.length; index += width) {
+            lines.push(word.slice(index, index + width));
+          }
+          continue;
+        }
+
+        const next = current ? `${current} ${word}` : word;
+        if (next.length > width) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = next;
+        }
+      }
+      if (current || paragraph === "") {
+        lines.push(current);
+      }
+    }
+    return lines.length > 0 ? lines : [""];
+  }
+
+  private renderBox(title: string, lines: string[], width: number, height: number): string[] {
+    const boxWidth = Math.max(2, width);
+    const innerWidth = Math.max(0, boxWidth - 2);
+    const contentHeight = Math.max(0, height - 2);
+    const safeTitle = ` ${title} `;
+    const renderedTitle = this.truncateVisible(safeTitle, innerWidth);
+    const titleWidth = Math.min(this.stripAnsi(renderedTitle).length, innerWidth);
+    const top = `┌${renderedTitle}${"─".repeat(Math.max(0, innerWidth - titleWidth))}┐`;
+    const bottom = `└${"─".repeat(innerWidth)}┘`;
+    const rendered = [top];
+    for (let index = 0; index < contentHeight; index += 1) {
+      rendered.push(`│${this.padVisible(lines[index] ?? "", innerWidth)}│`);
+    }
+    rendered.push(bottom);
+    return rendered;
+  }
+
+  private writeLines(lines: string[], width: number): void {
+    for (const line of lines) {
+      this.writeLine(line, width);
+    }
+  }
+
+  private writeFrame(lines: string[], width: number): void {
+    const lastIndex = lines.length - 1;
+    for (let index = 0; index < lines.length; index += 1) {
+      if (index === lastIndex) {
+        this.writeFinalLine(lines[index], width);
+      } else {
+        this.writeLine(lines[index], width);
+      }
+    }
   }
 
   private writeLine(text: string, width: number, bold = false): void {
+    process.stdout.write(`${this.renderLine(text, width, bold)}\n`);
+  }
+
+  private writeFinalLine(text: string, width: number, bold = false): void {
+    process.stdout.write(this.renderLine(text, width, bold));
+  }
+
+  private renderLine(text: string, width: number, bold = false): string {
     const visible = this.stripAnsi(text);
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
-    process.stdout.write(`${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}\n`);
+    return `${bold ? ANSI.bold : ""}${rendered}${padding}${ANSI.reset}`;
+  }
+
+  private padVisible(text: string, width: number): string {
+    const visible = this.stripAnsi(text);
+    const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
+    const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
+    return `${rendered}${padding}`;
+  }
+
+  private truncateVisible(text: string, width: number): string {
+    if (this.stripAnsi(text).length <= width) {
+      return text;
+    }
+    if (!text.includes("\x1b[")) {
+      return text.slice(0, width);
+    }
+
+    let output = "";
+    let visibleLength = 0;
+    for (let index = 0; index < text.length && visibleLength < width; index += 1) {
+      if (text[index] === "\x1b" && text[index + 1] === "[") {
+        const start = index;
+        index += 2;
+        while (index < text.length && text[index] !== "m") {
+          index += 1;
+        }
+        output += text.slice(start, index + 1);
+      } else {
+        output += text[index];
+        visibleLength += 1;
+      }
+    }
+    return `${output}${ANSI.reset}`;
   }
 
   private renderColumnHeader(column: ColumnName): string {
@@ -367,7 +755,7 @@ class SkillTui {
     this.message = `Staged ${row.name} across installed columns -> ${enabled ? "on" : "off"}.`;
   }
 
-  private apply(): void {
+  private save(): void {
     let changed = 0;
     for (const [key, enabled] of this.pending) {
       const [skill, agent] = key.split("\0") as [string, ColumnName];
@@ -375,7 +763,7 @@ class SkillTui {
     }
     this.pending.clear();
     this.reload();
-    this.message = `Applied ${changed} agent changes.`;
+    this.message = `Saved ${changed} agent changes.`;
   }
 
   private importSnapshot(snapshot: SkillSnapshot): void {

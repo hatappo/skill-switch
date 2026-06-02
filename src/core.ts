@@ -21,7 +21,7 @@ export const AGENTS = [
   "gemini-cli",
 ] as const;
 export const UNIVERSAL = "universal";
-export const COLUMNS = [...AGENTS, UNIVERSAL] as const;
+export const COLUMNS = [UNIVERSAL, ...AGENTS] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type ColumnName = (typeof COLUMNS)[number];
 export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter((agent) => agent !== "claude-code") as Exclude<
@@ -207,6 +207,8 @@ export class SkillInstance {
   readonly path: string;
   readonly enabled: boolean;
   readonly provenance: SkillProvenance | null;
+  readonly description: string;
+  readonly frontmatter: Record<string, string>;
 
   constructor(
     agent: ColumnName,
@@ -215,6 +217,8 @@ export class SkillInstance {
     enabled: boolean,
     provenance: SkillProvenance | null = null,
     targetAgent: AgentName | null = null,
+    description = "",
+    frontmatter: Record<string, string> = {},
   ) {
     this.agent = agent;
     this.targetAgent = targetAgent;
@@ -222,6 +226,8 @@ export class SkillInstance {
     this.path = path;
     this.enabled = enabled;
     this.provenance = provenance;
+    this.description = description;
+    this.frontmatter = { ...frontmatter };
   }
 
   toJSON(): Record<string, unknown> {
@@ -232,6 +238,8 @@ export class SkillInstance {
       enabled: this.enabled,
       provenance: this.provenance,
       targetAgent: this.targetAgent,
+      description: this.description,
+      frontmatter: this.frontmatter,
     };
   }
 }
@@ -281,6 +289,29 @@ export class SkillRow {
       return `${enabledCount}/${items.length}`;
     }
     return formatStatus(this.status(column));
+  }
+
+  description(column: ColumnName): string | null {
+    const instances = this.instances[column];
+    if (instances.length === 0) {
+      return null;
+    }
+
+    for (const instance of instances) {
+      const description = instance.description.trim();
+      if (description) {
+        return description;
+      }
+    }
+    return "";
+  }
+
+  frontmatter(column: ColumnName): Record<string, string> | null {
+    return this.instances[column][0]?.frontmatter ?? null;
+  }
+
+  path(column: ColumnName): string | null {
+    return this.instances[column][0]?.path ?? null;
   }
 
   toJSON(columns: ColumnName[] = [...COLUMNS]): Record<string, unknown> {
@@ -350,11 +381,13 @@ export function parseFrontmatter(text: string): Frontmatter {
 
 function parseSimpleYaml(lines: string[]): Record<string, string> {
   const values: Record<string, string> = {};
+  const stack: { indent: number; key: string }[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#") || !line.includes(":")) {
       continue;
     }
+
     const [rawKey, ...rest] = line.split(":");
     const key = rawKey.trim();
     const value = rest
@@ -362,7 +395,17 @@ function parseSimpleYaml(lines: string[]): Record<string, string> {
       .trim()
       .replace(/^["']|["']$/g, "");
     if (key) {
-      values[key] = value;
+      const indent = line.length - line.trimStart().length;
+      while (stack.length > 0 && indent <= stack.at(-1)!.indent) {
+        stack.pop();
+      }
+
+      const path = [...stack.map((item) => item.key), key].join(".");
+      if (value) {
+        values[path] = value;
+      } else {
+        stack.push({ indent, key });
+      }
     }
   }
   return values;
@@ -381,8 +424,8 @@ function skillFrontmatter(path: string): Record<string, string> {
 }
 
 export function provenanceFromFrontmatter(values: Record<string, string>): SkillProvenance | null {
-  const rawRepository = values["github-repo"];
-  const rawSkillPath = values["github-path"];
+  const rawRepository = frontmatterValue(values, "github-repo", "metadata.github-repo");
+  const rawSkillPath = frontmatterValue(values, "github-path", "metadata.github-path");
   if (!rawRepository || !rawSkillPath) {
     return null;
   }
@@ -396,11 +439,21 @@ export function provenanceFromFrontmatter(values: Record<string, string>): Skill
     repository,
     skillPath: normalizeSkillPath(rawSkillPath),
   };
-  const pin = pinFromGitHubRef(values["github-ref"]);
+  const pin = pinFromGitHubRef(frontmatterValue(values, "github-ref", "metadata.github-ref"));
   if (pin) {
     provenance.pin = pin;
   }
   return provenance;
+}
+
+function frontmatterValue(values: Record<string, string>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = values[key];
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function normalizeGitHubRepository(value: string): string | null {
@@ -773,6 +826,9 @@ class CodexAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("codex", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
+          values,
         );
       }),
     );
@@ -816,6 +872,9 @@ class ClaudeAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("claude-code", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
+        values,
       );
     });
   }
@@ -872,6 +931,9 @@ class CursorAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("cursor", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
+        values,
       );
     });
   }
@@ -915,6 +977,9 @@ class CopilotAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("github-copilot", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
+          values,
         );
       }),
     );
@@ -968,6 +1033,9 @@ class OpenCodeAdapter implements Adapter {
           path,
           this.isEnabled(new SkillInstance("opencode", name, path, true, null)),
           provenanceFromFrontmatter(values),
+          null,
+          values.description,
+          values,
         );
       }),
     );
@@ -1026,6 +1094,9 @@ class GeminiAdapter implements Adapter {
         path,
         this.isEnabled(new SkillInstance("gemini-cli", name, path, true, null)),
         provenanceFromFrontmatter(values),
+        null,
+        values.description,
+        values,
       );
     });
   }
@@ -1166,6 +1237,8 @@ export class SkillManager {
           this.adapters[agent].isEnabled(instance),
           provenance,
           agent,
+          values.description,
+          values,
         );
       });
     });
