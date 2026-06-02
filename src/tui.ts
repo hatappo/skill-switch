@@ -197,7 +197,7 @@ class SkillTui {
     process.stdout.write("\x1b[?25l\x1b[H\x1b[2J");
     this.writeLines(
       this.renderBox(
-        "skill-switch",
+        "Keys",
         [
           "Space=cell | t=toggle row | o=row on | x=row off",
           "d=delete skill | i=install missing | a=apply | r=reload | q=quit",
