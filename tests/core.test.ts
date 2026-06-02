@@ -38,10 +38,13 @@ function ensureDir(path: string): void {
 }
 
 test("parseFrontmatter parses simple YAML frontmatter", () => {
-  const parsed = parseFrontmatter("---\nname: test\ndescription: Hi\n---\nBody\n");
+  const parsed = parseFrontmatter(
+    "---\nname: test\ndescription: Hi\nmetadata:\n  github-path: skills/test\n---\nBody\n",
+  );
   assert.equal(parsed.values.name, "test");
   assert.equal(parsed.values.description, "Hi");
-  assert.deepEqual(parsed.bounds, [0, 3]);
+  assert.equal(parsed.values["metadata.github-path"], "skills/test");
+  assert.deepEqual(parsed.bounds, [0, 5]);
 });
 
 test("provenanceFromFrontmatter reads GitHub metadata", () => {
@@ -244,7 +247,7 @@ test("SkillManager matches skills by name across agents", () => {
 test("SkillRow exposes the selected column description without fallback", () => {
   const home = tmpHome();
   const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
-  writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo");
+  writeSkill(join(home, ".claude", "skills", "demo", "SKILL.md"), "demo", "allowed-tools: Read\n");
   ensureDir(dirname(codexSkill));
   writeFileSync(codexSkill, "---\nname: demo\n---\n\n# demo\n", "utf8");
 
@@ -253,6 +256,11 @@ test("SkillRow exposes the selected column description without fallback", () => 
   assert.equal(row?.description("codex"), "");
   assert.equal(row?.description("claude-code"), "Test skill");
   assert.equal(row?.description("cursor"), null);
+  assert.deepEqual(row?.frontmatter("codex"), { name: "demo" });
+  assert.equal(row?.frontmatter("claude-code")?.["allowed-tools"], "Read");
+  assert.equal(row?.frontmatter("cursor"), null);
+  assert.equal(row?.path("codex"), codexSkill);
+  assert.equal(row?.path("cursor"), null);
 });
 
 test("activeColumns and formatTable hide columns without skill folders", () => {

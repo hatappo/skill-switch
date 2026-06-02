@@ -55,6 +55,7 @@ class SkillTui {
   private deletePlan: DeletePlan | null = null;
   private message = "";
   private showAllColumns = false;
+  private expandFrontmatter = false;
   private readonly initialSnapshot?: SkillSnapshot;
 
   constructor(manager: SkillManager, options: TuiOptions) {
@@ -149,8 +150,15 @@ class SkillTui {
       this.prepareDelete();
     } else if (key.name === "v") {
       this.toggleColumnView();
+    } else if (key.name === "f") {
+      this.toggleFrontmatterExpansion();
     }
     return false;
+  }
+
+  private toggleFrontmatterExpansion(): void {
+    this.expandFrontmatter = !this.expandFrontmatter;
+    this.message = `Frontmatter pane: ${this.expandFrontmatter ? "expanded" : "compact"}.`;
   }
 
   private toggleColumnView(): void {
@@ -169,8 +177,12 @@ class SkillTui {
     const height = process.stdout.rows || 30;
     const controlsHeight = 4;
     const footerHeight = 1;
-    const descriptionHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
-    const skillsHeight = Math.max(3, height - controlsHeight - descriptionHeight - footerHeight);
+    const baseDetailHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
+    const maxDetailHeight = Math.max(3, height - controlsHeight - footerHeight - 3);
+    const detailHeight = this.expandFrontmatter
+      ? Math.min(maxDetailHeight, Math.max(baseDetailHeight, this.expandedDetailHeight(width)))
+      : baseDetailHeight;
+    const skillsHeight = Math.max(3, height - controlsHeight - detailHeight - footerHeight);
     const tableHeight = Math.max(0, skillsHeight - 3);
     const agentColumnsWidth = this.columns.reduce(
       (total, column) => total + 2 + COLUMN_WIDTHS[column],
@@ -196,6 +208,8 @@ class SkillTui {
       width,
     );
 
+    this.writeLines(this.detailPaneLines(width, detailHeight), width);
+
     const tableLines = [
       [
         "Skill".padEnd(nameWidth),
@@ -220,21 +234,75 @@ class SkillTui {
     }
     this.writeLines(this.renderBox("Skills", tableLines, width, skillsHeight), width);
 
-    this.writeLines(
-      this.renderBox(
-        "Description",
-        this.descriptionLines(width - 4, descriptionHeight - 2),
-        width,
-        descriptionHeight,
-      ),
-      width,
-    );
-
     const footer = `${this.message}  Pending: ${this.pending.size}`;
     this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
   }
 
-  private descriptionLines(width: number, height: number): string[] {
+  private detailPaneLines(width: number, height: number): string[] {
+    if (width >= 100 && height >= 4) {
+      const [descriptionWidth, frontmatterWidth] = this.detailPaneWidths(width);
+      const frontmatterLines = this.frontmatterPaneLines(frontmatterWidth - 2, height - 2);
+      const hiddenCount = this.hiddenLineCount(
+        this.selectedFrontmatterLinesForWidth(frontmatterWidth - 2),
+        height - 2,
+      );
+      const descriptionBox = this.renderBox(
+        this.descriptionPaneTitle(descriptionWidth - 2),
+        this.descriptionPaneLines(descriptionWidth - 2, height - 2),
+        descriptionWidth,
+        height,
+      );
+      const frontmatterBox = this.renderBox(
+        this.frontmatterPaneTitle(frontmatterWidth - 2, hiddenCount),
+        frontmatterLines,
+        frontmatterWidth,
+        height,
+      );
+      return descriptionBox.map((line, index) => `${line}${frontmatterBox[index] ?? ""}`);
+    }
+
+    if (height < 6) {
+      return this.renderBox(
+        this.descriptionPaneTitle(width - 2),
+        this.descriptionPaneLines(width - 2, height - 2),
+        width,
+        height,
+      );
+    }
+
+    const descriptionHeight = this.expandFrontmatter ? 3 : Math.ceil(height / 2);
+    const frontmatterHeight = height - descriptionHeight;
+    const frontmatterLines = this.frontmatterPaneLines(width - 2, frontmatterHeight - 2);
+    const hiddenCount = this.hiddenLineCount(
+      this.selectedFrontmatterLinesForWidth(width - 2),
+      frontmatterHeight - 2,
+    );
+    return [
+      ...this.renderBox(
+        this.descriptionPaneTitle(width - 2),
+        this.descriptionPaneLines(width - 2, descriptionHeight - 2),
+        width,
+        descriptionHeight,
+      ),
+      ...this.renderBox(
+        this.frontmatterPaneTitle(width - 2, hiddenCount),
+        frontmatterLines,
+        width,
+        frontmatterHeight,
+      ),
+    ];
+  }
+
+  private expandedDetailHeight(width: number): number {
+    if (width >= 100) {
+      const [, frontmatterWidth] = this.detailPaneWidths(width);
+      return this.selectedFrontmatterLinesForWidth(frontmatterWidth - 2).length + 2;
+    }
+
+    return this.selectedFrontmatterLinesForWidth(width - 2).length + 5;
+  }
+
+  private descriptionPaneLines(width: number, height: number): string[] {
     const row = this.currentRow();
     if (!row) {
       return ["No skill selected."];
@@ -242,21 +310,113 @@ class SkillTui {
 
     const column = this.columns[this.agentIndex];
     if (!column) {
-      return [`${ANSI.bold}${row.name}${ANSI.reset}`, `${ANSI.dim}Not installed${ANSI.reset}`];
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
     }
 
+    const descriptionLines = this.selectedDescriptionLines(row, column, width);
+    return descriptionLines.slice(0, height);
+  }
+
+  private frontmatterPaneLines(width: number, height: number): string[] {
+    const row = this.currentRow();
+    if (!row) {
+      return ["No skill selected."];
+    }
+
+    const column = this.columns[this.agentIndex];
+    if (!column) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    return this.limitPaneLines(this.selectedFrontmatterLines(row, column, width), height);
+  }
+
+  private selectedFrontmatterLinesForWidth(width: number): string[] {
+    const row = this.currentRow();
+    const column = this.columns[this.agentIndex];
+    if (!row || !column) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+    return this.selectedFrontmatterLines(row, column, width);
+  }
+
+  private selectedDescriptionLines(row: SkillRow, column: ColumnName, width: number): string[] {
     const description = row.description(column);
-    const label = COLUMN_LABELS[column];
-    const contentLines =
-      description === null
-        ? [`${ANSI.dim}Not installed${ANSI.reset}`]
-        : description
-          ? this.wrapText(description, width)
-          : [`${ANSI.dim}(no description)${ANSI.reset}`];
-    return [
-      `${ANSI.bold}${row.name}${ANSI.reset}  ${ANSI.dim}${label}${ANSI.reset}`,
-      ...contentLines,
-    ].slice(0, height);
+    if (description === null) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+    if (!description) {
+      return [`${ANSI.dim}(no description)${ANSI.reset}`];
+    }
+    return this.wrapText(description, width);
+  }
+
+  private selectedFrontmatterLines(row: SkillRow, column: ColumnName, width: number): string[] {
+    const frontmatter = row.frontmatter(column);
+    if (frontmatter === null) {
+      return [`${ANSI.dim}Not installed${ANSI.reset}`];
+    }
+
+    const lines = Object.entries(frontmatter)
+      .filter(([key, value]) => key !== "name" && key !== "description" && value !== "")
+      .flatMap(([key, value]) => this.wrapText(`${key}: ${value}`, width));
+    return lines.length > 0 ? lines : [`${ANSI.dim}(no frontmatter)${ANSI.reset}`];
+  }
+
+  private limitPaneLines(lines: string[], height: number): string[] {
+    return lines.slice(0, Math.max(0, height));
+  }
+
+  private hiddenLineCount(lines: string[], height: number): number {
+    return Math.max(0, lines.length - Math.max(0, height));
+  }
+
+  private detailPaneWidths(width: number): [number, number] {
+    const descriptionWidth = Math.floor(width * 0.58);
+    return [descriptionWidth, width - descriptionWidth];
+  }
+
+  private descriptionPaneTitle(innerWidth: number): string {
+    const row = this.currentRow();
+    const column = this.columns[this.agentIndex];
+    const path = row && column ? row.path(column) : null;
+    return this.detailPaneTitle("Description", innerWidth, path);
+  }
+
+  private frontmatterPaneTitle(innerWidth: number, hiddenCount: number): string {
+    const suffix = this.frontmatterTitleSuffix(hiddenCount);
+    return this.detailPaneTitle("Frontmatter", innerWidth, suffix);
+  }
+
+  private frontmatterTitleSuffix(hiddenCount: number): string | null {
+    if (this.expandFrontmatter) {
+      return hiddenCount > 0 ? `(+${hiddenCount} more, f collapse)` : "(f collapse)";
+    }
+    return hiddenCount > 0 ? `(+${hiddenCount} more, f expand)` : null;
+  }
+
+  private detailPaneTitle(label: string, innerWidth: number, suffix: string | null): string {
+    if (!suffix) {
+      return label;
+    }
+
+    const available = innerWidth - label.length - 3;
+    if (available < 8) {
+      return label;
+    }
+    const suffixText =
+      label === "Description" ? this.truncateStart(suffix, available) : suffix.slice(0, available);
+    return `${label}  ${ANSI.dim}${suffixText}${ANSI.reset}`;
+  }
+
+  private truncateStart(text: string, width: number): string {
+    if (text.length <= width) {
+      return text;
+    }
+    if (width <= 1) {
+      return "…".slice(0, width);
+    }
+    return `…${text.slice(-(width - 1))}`;
   }
 
   private wrapText(text: string, width: number): string[] {
@@ -299,9 +459,9 @@ class SkillTui {
     const innerWidth = Math.max(0, boxWidth - 2);
     const contentHeight = Math.max(0, height - 2);
     const safeTitle = ` ${title} `;
-    const titleWidth = Math.min(safeTitle.length, innerWidth);
-    const top =
-      `┌${safeTitle.slice(0, titleWidth)}` + `${"─".repeat(Math.max(0, innerWidth - titleWidth))}┐`;
+    const renderedTitle = this.truncateVisible(safeTitle, innerWidth);
+    const titleWidth = Math.min(this.stripAnsi(renderedTitle).length, innerWidth);
+    const top = `┌${renderedTitle}${"─".repeat(Math.max(0, innerWidth - titleWidth))}┐`;
     const bottom = `└${"─".repeat(innerWidth)}┘`;
     const rendered = [top];
     for (let index = 0; index < contentHeight; index += 1) {
@@ -337,6 +497,32 @@ class SkillTui {
     const rendered = text.includes("\x1b[") ? text : text.slice(0, width);
     const padding = " ".repeat(Math.max(0, width - Math.min(visible.length, width)));
     return `${rendered}${padding}`;
+  }
+
+  private truncateVisible(text: string, width: number): string {
+    if (this.stripAnsi(text).length <= width) {
+      return text;
+    }
+    if (!text.includes("\x1b[")) {
+      return text.slice(0, width);
+    }
+
+    let output = "";
+    let visibleLength = 0;
+    for (let index = 0; index < text.length && visibleLength < width; index += 1) {
+      if (text[index] === "\x1b" && text[index + 1] === "[") {
+        const start = index;
+        index += 2;
+        while (index < text.length && text[index] !== "m") {
+          index += 1;
+        }
+        output += text.slice(start, index + 1);
+      } else {
+        output += text[index];
+        visibleLength += 1;
+      }
+    }
+    return `${output}${ANSI.reset}`;
   }
 
   private renderColumnHeader(column: ColumnName): string {

@@ -181,6 +181,7 @@ Advanced keys:
 
 | Key | Command     | Action                                                                                       |
 | --- | ----------- | -------------------------------------------------------------------------------------------- |
+| `f` | frontmatter | Expand or collapse the Frontmatter pane. Remaining hidden lines are shown in the pane title. |
 | `v` | column view | Toggle between active columns and all supported columns. Inactive column headers are dimmed. |
 
 ## References
