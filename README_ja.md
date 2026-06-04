@@ -21,19 +21,23 @@ Agent ID は `gh skill install --help` の括弧内の名称に合わせてい�
 `universal` は skill-switch 内で `~/.agents/skills` を表す列です。この列への install は gh の
 `universal` agent を使います。表では左端に表示されます。
 
-| Agent              | ID               | User skill folders          | 反映先                                                                          |
-| ------------------ | ---------------- | --------------------------- | ------------------------------------------------------------------------------- |
-| Universal          | `universal`      | `~/.agents/skills`          | Claude Code 以外の Universal 対応 Agent 向け設定をまとめて書き込み              |
-| Codex              | `codex`          | `~/.codex/skills`           | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み |
-| Claude Code        | `claude-code`    | `~/.claude/skills`          | `~/.claude/settings.json` の `skillOverrides` を書き込み                        |
-| Cursor             | `cursor`         | `~/.cursor/skills`          | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み     |
-| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | `~/.copilot/settings.json` の `disabledSkills` を書き込み                       |
-| OpenCode           | `opencode`       | `~/.config/opencode/skills` | `~/.config/opencode/opencode.json` の `permission.skill` を書き込み             |
-| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | `~/.gemini/settings.json` の `skills.disabled` を書き込み                       |
+| Agent              | ID               | User skill folders          | 反映先                                                                            |
+| ------------------ | ---------------- | --------------------------- | --------------------------------------------------------------------------------- |
+| Universal          | `universal`      | `~/.agents/skills`          | Claude Code と Cline 以外の Universal 対応 Agent 向け設定をまとめて書き込み       |
+| Codex              | `codex`          | `~/.codex/skills`           | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み   |
+| Claude Code        | `claude-code`    | `~/.claude/skills`          | `~/.claude/settings.json` の `skillOverrides` を書き込み                          |
+| Cursor             | `cursor`         | `~/.cursor/skills`          | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み       |
+| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills`         | `~/.copilot/settings.json` の `disabledSkills` を書き込み                         |
+| OpenCode           | `opencode`       | `~/.config/opencode/skills` | `~/.config/opencode/opencode.json` の `permission.skill` を書き込み               |
+| Gemini CLI         | `gemini-cli`     | `~/.gemini/skills`          | `~/.gemini/settings.json` の `skills.disabled` を書き込み                         |
+| Cline              | `cline`          | `~/.cline/skills`           | `~/.cline/data/settings/global-settings.json` の `globalSkillsToggles` を書き込み |
 
 TUI と `list` では、user skill folder が存在する列だけを表示します。行全体への操作と
 デフォルトの `install-missing` 対象も、その active な列だけです。bootstrap 用途では
 `install-missing` に Agent ID を明示指定できます。
+
+現時点では full toggle support に向かないと判断した Agent の調査結果は
+[Agent support notes](./docs/agent-support-notes_ja.md) にまとめています。
 
 Cursor は Codex のような path ベースの一括 On/Off 設定を公開していないため、このツールでは `disable-model-invocation` を使います。これは自動呼び出しを止める設定で、明示呼び出しの扱いは Cursor 側の仕様に従います。
 
@@ -51,6 +55,7 @@ On/Off の書き込みは次のルールに従います。
 | GitHub Copilot CLI | `disabledSkills` に追加                                                                                                 | `disabledSkills` から削除                                                 |
 | OpenCode           | `permission.skill[name]=deny`                                                                                           | 上位の deny rule を上書きできるよう `permission.skill[name]=allow` を明示 |
 | Gemini CLI         | `skills.disabled` に追加                                                                                                | `skills.disabled` から削除し、必要なら `skills.enabled = true` は維持     |
+| Cline              | `globalSkillsToggles[path]=false` を設定                                                                                | `globalSkillsToggles[path]` を削除                                        |
 | Universal          | `~/.agents/skills` の path/name に対して Codex、Cursor、Copilot CLI、OpenCode、Gemini CLI の OFF 設定をまとめて書き込み | 同じ対象に ON 設定をまとめて書き込み                                      |
 
 明示的な ON エントリが既にある状態で OFF にする場合は、各 Agent の OFF 形式へ上書きします。
@@ -61,7 +66,7 @@ On/Off の書き込みは次のルールに従います。
 Agent 個別の列は、その Agent の primary user skill folder にある skill だけを制御します。
 同名の Universal skill には作用しません。Universal 列は `~/.agents/skills` の skill だけを
 対象にし、Universal 対応 Agent 向けの設定をまとめて書き込みます。Claude Code は公式の skill
-location に `~/.agents/skills` を含まないため対象外です。
+location に `~/.agents/skills` を含まないため対象外です。Cline も同じ理由で対象外です。
 
 Universal toggle の対象:
 
@@ -73,6 +78,7 @@ Universal toggle の対象:
 | GitHub Copilot CLI | Yes              | `~/.copilot/settings.json`                |
 | OpenCode           | Yes              | `~/.config/opencode/opencode.json`        |
 | Gemini CLI         | Yes              | `~/.gemini/settings.json`                 |
+| Cline              | No               | 触りません                                |
 
 ## 使い方
 
@@ -133,7 +139,7 @@ user skill folder へコピーします。
 local copy 時は `SKILL.md` frontmatter を sanitize し、Agent Skills spec の field である
 `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` だけを残します。
 複数の列をインストール元として使える場合は、Universal、Codex、Claude Code、Cursor、
-GitHub Copilot CLI、OpenCode、Gemini CLI の順で最初に見つかったものを使います。
+GitHub Copilot CLI、OpenCode、Gemini CLI、Cline の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
 存在しない対応 Agent へまとめてインストールします。
@@ -188,57 +194,7 @@ Advanced keys:
 - GitHub Copilot CLI docs: https://docs.github.com/copilot/reference/copilot-cli-reference/cli-command-reference
 - OpenCode Agent Skills docs: https://opencode.ai/docs/skills/
 - Gemini CLI configuration docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md
-
-### gh
-
-```sh
- $ gh skill install --help | grep '  - '
-  - GitHub Copilot (github-copilot)
-  - Claude Code (claude-code)
-  - Cursor (cursor)
-  - Codex (codex)
-  - Gemini CLI (gemini-cli)
-  - Antigravity (antigravity)
-  - AdaL (adal)
-  - Amp (amp)
-  - Augment (augment)
-  - IBM Bob (bob)
-  - Cline (cline)
-  - CodeBuddy (codebuddy)
-  - Command Code (command-code)
-  - Continue (continue)
-  - Cortex Code (cortex)
-  - Crush (crush)
-  - Deep Agents (deepagents)
-  - Droid (droid)
-  - Firebender (firebender)
-  - Goose (goose)
-  - iFlow CLI (iflow-cli)
-  - Junie (junie)
-  - Kilo Code (kilo)
-  - Kimi Code CLI (kimi-cli)
-  - Kiro CLI (kiro-cli)
-  - Kode (kode)
-  - MCPJam (mcpjam)
-  - Mistral Vibe (mistral-vibe)
-  - Mux (mux)
-  - Neovate (neovate)
-  - OpenClaw (openclaw)
-  - OpenCode (opencode)
-  - OpenHands (openhands)
-  - Pi (pi)
-  - Pochi (pochi)
-  - Qoder (qoder)
-  - Qwen Code (qwen-code)
-  - Replit (replit)
-  - Roo Code (roo)
-  - Trae (trae)
-  - Trae CN (trae-cn)
-  - Universal (universal)
-  - Warp (warp)
-  - Windsurf (windsurf)
-  - Zencoder (zencoder)
-```
+- Cline Skills docs: https://docs.cline.bot/customization/skills
 
 ## 今後の予定
 

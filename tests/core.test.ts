@@ -382,12 +382,19 @@ test("Universal column applies settings to Universal-compatible agents only", ()
   const universalSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
   const codexConfig = join(home, ".codex", "config.toml");
   const claudeSettings = join(home, ".claude", "settings.json");
+  const clineSettings = join(home, ".cline", "data", "settings", "global-settings.json");
   const copilotSettings = join(home, ".copilot", "settings.json");
   const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
   const geminiSettings = join(home, ".gemini", "settings.json");
   writeSkill(universalSkill, "demo", "disable-model-invocation: false\n");
   ensureDir(dirname(claudeSettings));
   writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "on" } }), "utf8");
+  ensureDir(dirname(clineSettings));
+  writeFileSync(
+    clineSettings,
+    JSON.stringify({ globalSkillsToggles: { [resolve(universalSkill)]: true } }),
+    "utf8",
+  );
 
   const manager = new SkillManager(home);
   assert.deepEqual(manager.applyState("demo", ["universal"], false), ["universal"]);
@@ -398,6 +405,10 @@ test("Universal column applies settings to Universal-compatible agents only", ()
   assert.equal(JSON.parse(readFileSync(opencodeConfig, "utf8")).permission.skill.demo, "deny");
   assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, ["demo"]);
   assert.equal(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides.demo, "on");
+  assert.equal(
+    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(universalSkill)],
+    true,
+  );
   assert.equal(
     manager
       .scan()
@@ -415,6 +426,10 @@ test("Universal column applies settings to Universal-compatible agents only", ()
   assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, []);
   assert.equal(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.enabled, true);
   assert.equal(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides.demo, "on");
+  assert.equal(
+    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(universalSkill)],
+    true,
+  );
 });
 
 test("Universal column can report mixed state", () => {
@@ -423,6 +438,7 @@ test("Universal column can report mixed state", () => {
   ensureDir(join(home, ".codex", "skills"));
   ensureDir(join(home, ".cursor", "skills"));
   ensureDir(join(home, ".copilot", "skills"));
+  ensureDir(join(home, ".cline", "skills"));
   const copilotSettings = join(home, ".copilot", "settings.json");
   ensureDir(dirname(copilotSettings));
   writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
@@ -441,18 +457,27 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
   const home = tmpHome();
   const universalSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
   const claudeSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  const clineSkill = join(home, ".cline", "skills", "demo", "SKILL.md");
   const geminiSkill = join(home, ".gemini", "skills", "demo", "SKILL.md");
   const codexConfig = join(home, ".codex", "config.toml");
   const claudeSettings = join(home, ".claude", "settings.json");
+  const clineSettings = join(home, ".cline", "data", "settings", "global-settings.json");
   const copilotSettings = join(home, ".copilot", "settings.json");
   const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
   const geminiSettings = join(home, ".gemini", "settings.json");
   writeSkill(universalSkill, "demo");
   writeSkill(claudeSkill, "demo");
+  writeSkill(clineSkill, "demo");
   writeSkill(geminiSkill, "demo");
   setCodexSkillEnabled(codexConfig, universalSkill, false);
   ensureDir(dirname(claudeSettings));
   writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "off" } }), "utf8");
+  ensureDir(dirname(clineSettings));
+  writeFileSync(
+    clineSettings,
+    JSON.stringify({ globalSkillsToggles: { [resolve(clineSkill)]: false } }),
+    "utf8",
+  );
   ensureDir(dirname(copilotSettings));
   writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
   ensureDir(dirname(opencodeConfig));
@@ -469,6 +494,7 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
     resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
+    resolve(dirname(clineSkill)),
   ]);
 
   const deleted = manager.deleteSkill("demo");
@@ -477,12 +503,15 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
     resolve(dirname(universalSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
+    resolve(dirname(clineSkill)),
   ]);
   assert.equal(existsSync(dirname(universalSkill)), false);
   assert.equal(existsSync(dirname(claudeSkill)), false);
+  assert.equal(existsSync(dirname(clineSkill)), false);
   assert.equal(existsSync(dirname(geminiSkill)), false);
   assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(universalSkill)), false);
   assert.deepEqual(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides, {});
+  assert.deepEqual(JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles, {});
   assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, []);
   assert.deepEqual(JSON.parse(readFileSync(opencodeConfig, "utf8")).permission.skill, {});
   assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, []);
@@ -568,6 +597,37 @@ test("Gemini adapter writes OFF and removes disabled entry for ON", () => {
 
   assert.deepEqual(manager.applyState("demo", ["gemini-cli"], false), ["gemini-cli"]);
   assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).skills.disabled, ["demo"]);
+});
+
+test("Cline adapter writes OFF and removes toggle entry for ON", () => {
+  const home = tmpHome();
+  const skill = join(home, ".cline", "skills", "demo", "SKILL.md");
+  const settings = join(home, ".cline", "data", "settings", "global-settings.json");
+  writeSkill(skill, "demo");
+  ensureDir(dirname(settings));
+  writeFileSync(
+    settings,
+    JSON.stringify({ globalSkillsToggles: { [resolve(skill)]: false } }),
+    "utf8",
+  );
+
+  const manager = new SkillManager(home);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.status("cline"),
+    "off",
+  );
+
+  assert.deepEqual(manager.applyState("demo", ["cline"], true), ["cline"]);
+  assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).globalSkillsToggles, {});
+
+  assert.deepEqual(manager.applyState("demo", ["cline"], false), ["cline"]);
+  assert.equal(
+    JSON.parse(readFileSync(settings, "utf8")).globalSkillsToggles[resolve(skill)],
+    false,
+  );
 });
 
 test("buildInstallMissingCommands uses provenance from installed agents", () => {

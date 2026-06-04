@@ -19,15 +19,15 @@ export const AGENTS = [
   "github-copilot",
   "opencode",
   "gemini-cli",
+  "cline",
 ] as const;
 export const UNIVERSAL = "universal";
 export const COLUMNS = [UNIVERSAL, ...AGENTS] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type ColumnName = (typeof COLUMNS)[number];
-export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter((agent) => agent !== "claude-code") as Exclude<
-  AgentName,
-  "claude-code"
->[];
+export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter(
+  (agent) => agent !== "claude-code" && agent !== "cline",
+) as Exclude<AgentName, "claude-code" | "cline">[];
 export type SkillStatus = "on" | "off" | "mixed" | "-";
 export const AGENT_LABELS: Record<AgentName, string> = {
   codex: "Codex",
@@ -36,6 +36,7 @@ export const AGENT_LABELS: Record<AgentName, string> = {
   "github-copilot": "Copilot CLI",
   opencode: "OpenCode",
   "gemini-cli": "Gemini CLI",
+  cline: "Cline",
 };
 export const COLUMN_LABELS: Record<ColumnName, string> = {
   ...AGENT_LABELS,
@@ -48,6 +49,7 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   "github-copilot": 11,
   opencode: 8,
   "gemini-cli": 10,
+  cline: 6,
 };
 export const COLUMN_WIDTHS: Record<ColumnName, number> = {
   ...AGENT_COLUMN_WIDTHS,
@@ -61,6 +63,7 @@ export const AGENT_PRIMARY_SKILL_ROOTS: Record<AgentName, string[]> = {
   "github-copilot": [".copilot", "skills"],
   opencode: [".config", "opencode", "skills"],
   "gemini-cli": [".gemini", "skills"],
+  cline: [".cline", "skills"],
 };
 export const GH_MISSING_MESSAGE =
   "gh command not found. Install GitHub CLI and the gh skill extension first.";
@@ -1137,6 +1140,67 @@ class GeminiAdapter implements Adapter {
   }
 }
 
+class ClineAdapter implements Adapter {
+  readonly root: string;
+  readonly settingsPath: string;
+  readonly home: string;
+
+  constructor(home: string) {
+    this.home = home;
+    this.root = join(home, ".cline", "skills");
+    this.settingsPath = join(home, ".cline", "data", "settings", "global-settings.json");
+  }
+
+  discover(): SkillInstance[] {
+    return discoverSkillFiles(this.root).map((path) => {
+      const values = skillFrontmatter(path);
+      const name = values.name || basename(dirname(path));
+      return new SkillInstance(
+        "cline",
+        name,
+        path,
+        this.isEnabled(new SkillInstance("cline", name, path, true, null)),
+        provenanceFromFrontmatter(values),
+        null,
+        values.description,
+        values,
+      );
+    });
+  }
+
+  isEnabled(instance: SkillInstance): boolean {
+    const settings = readJson(this.settingsPath);
+    const toggles = readObject(settings.globalSkillsToggles);
+    return toggles[resolve(instance.path)] !== false;
+  }
+
+  setEnabled(instance: SkillInstance, enabled: boolean): void {
+    const settings = readJson(this.settingsPath);
+    const toggles = readObject(settings.globalSkillsToggles);
+    if (enabled) {
+      delete toggles[resolve(instance.path)];
+    } else {
+      toggles[resolve(instance.path)] = false;
+    }
+    settings.globalSkillsToggles = toggles;
+    writeJson(this.settingsPath, settings);
+  }
+
+  remove(instance: SkillInstance): void {
+    if (!existsSync(this.settingsPath)) {
+      return;
+    }
+    const settings = readJson(this.settingsPath);
+    const toggles = readObject(settings.globalSkillsToggles);
+    if (!(resolve(instance.path) in toggles)) {
+      return;
+    }
+    delete toggles[resolve(instance.path)];
+    settings.globalSkillsToggles = toggles;
+    writeJson(this.settingsPath, settings);
+  }
+}
+
 type SkillPermissionValue = "allow" | "ask" | "deny";
 type SkillPermissions = SkillPermissionValue | Record<string, unknown>;
 
@@ -1206,6 +1270,7 @@ export class SkillManager {
       "github-copilot": new CopilotAdapter(resolvedHome),
       opencode: new OpenCodeAdapter(resolvedHome),
       "gemini-cli": new GeminiAdapter(resolvedHome),
+      cline: new ClineAdapter(resolvedHome),
     };
   }
 
