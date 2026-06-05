@@ -174,7 +174,7 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF  |
 | `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除    |
 | `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備      |
-| `y`/`n`                 | confirm/cancel  | 準備したインストール/削除の実行またはキャンセル |
+| `y`/`n`/`Esc`           | confirm/cancel  | 準備したインストール/削除の実行またはキャンセル |
 | `s`                     | save            | 未保存変更を各 Agent の設定へ保存               |
 | `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄      |
 | `?`                     | help            | help view を開く/閉じる                         |

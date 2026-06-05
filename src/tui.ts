@@ -280,7 +280,7 @@ class SkillTui {
       `${ANSI.bold}Install/Delete${ANSI.reset}`,
       this.helpLine("i", "install for missing agents", width),
       this.helpLine("d", "delete skill", width),
-      this.helpLine("y / n", "confirm / cancel install or delete", width),
+      this.helpLine("y / n / Esc", "confirm / cancel install or delete", width),
       "",
       `${ANSI.bold}Save${ANSI.reset}`,
       this.helpLine("s", "save pending changes", width),
@@ -652,7 +652,7 @@ class SkillTui {
       this.installPlan = null;
       this.message = `Cancelled install for ${plan.skill}.`;
     } else {
-      this.message = "Confirm install: press y to run gh skill install, or n to cancel.";
+      this.message = "Confirm install: press y to run gh skill install, or n/Esc to cancel.";
     }
     return false;
   }
@@ -668,7 +668,7 @@ class SkillTui {
       this.deletePlan = null;
       this.message = `Cancelled delete for ${plan.skill}.`;
     } else {
-      this.message = "Confirm delete: press y to delete skill directories, or n to cancel.";
+      this.message = "Confirm delete: press y to delete skill directories, or n/Esc to cancel.";
     }
     return false;
   }
@@ -796,7 +796,7 @@ class SkillTui {
     this.installPlan = { skill: row.name, actions };
     const agents = actions.map((action) => COLUMN_LABELS[action.agent]).join(", ");
     const method = actions[0]?.kind === "copy" ? "copy locally" : "run gh";
-    this.message = `Confirm install: ${row.name} for ${agents}? Press y to ${method}, n to cancel.`;
+    this.message = `Confirm install: ${row.name} for ${agents}? Press y to ${method}, n/Esc to cancel.`;
   }
 
   private prepareDelete(): void {
@@ -816,7 +816,7 @@ class SkillTui {
     }
 
     this.deletePlan = { skill: row.name, targets };
-    this.message = `Confirm delete: ${row.name} from ${targets.length} directories? Press y to delete, n to cancel.`;
+    this.message = `Confirm delete: ${row.name} from ${targets.length} directories? Press y to delete, n/Esc to cancel.`;
   }
 
   private executeInstallPlan(): void {
