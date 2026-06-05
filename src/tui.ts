@@ -137,8 +137,6 @@ class SkillTui {
       this.agentIndex = Math.min(Math.max(0, this.columns.length - 1), this.agentIndex + 1);
     } else if (key.name === "space") {
       this.toggleCell();
-    } else if (key.name === "return" || key.name === "enter") {
-      this.toggleRow();
     } else if (key.name === "o") {
       this.setRow(true);
     } else if (key.name === "x") {
@@ -197,7 +195,7 @@ class SkillTui {
       return;
     }
 
-    const controlsHeight = 4;
+    const controlsHeight = 5;
     const footerHeight = 1;
     const baseDetailHeight = height >= 18 ? 6 : Math.max(3, Math.floor(height / 4));
     const maxDetailHeight = Math.max(3, height - controlsHeight - footerHeight - 3);
@@ -221,8 +219,9 @@ class SkillTui {
       this.renderBox(
         `Keys ${ANSI.dim}(press ? for help)${ANSI.reset}`,
         [
-          `${this.keyText("Space")}=cell | ${this.keyText("Enter")}=row | ${this.keyText("o")}=row on | ${this.keyText("x")}=row off`,
-          `${this.keyText("d")}=delete skill | ${this.keyText("i")}=install missing | ${this.keyText("s")}=save | ${this.keyText("r")}=reload | ${this.keyText("q")}=quit`,
+          `${this.keyText("Space")}=toggle cell | ${this.keyText("o")}=row on | ${this.keyText("x")}=row off`,
+          `${this.keyText("s")}=save | ${this.keyText("r")}=reload | ${this.keyText("q")}=quit`,
+          `${this.keyText("d")}=delete skill | ${this.keyText("i")}=install missing`,
         ],
         width,
         controlsHeight,
@@ -257,7 +256,7 @@ class SkillTui {
     this.writeLines(this.renderBox("Skills", tableLines, width, skillsHeight), width);
 
     const footer = `${this.message}  Pending: ${this.pending.size}`;
-    this.writeFinalLine(`${ANSI.reverse}${ANSI.bold}${footer}`, width);
+    this.writeFinalLine(`${this.footerStyle()}${footer}`, width);
   }
 
   private drawHelp(width: number, height: number): void {
@@ -276,7 +275,6 @@ class SkillTui {
       "",
       `${ANSI.bold}Toggle${ANSI.reset}`,
       this.helpLine("Space", "toggle selected cell", width),
-      this.helpLine("Enter", "toggle selected row", width),
       this.helpLine("o / x", "turn selected row on / off", width),
       "",
       `${ANSI.bold}Install/Delete${ANSI.reset}`,
@@ -306,6 +304,13 @@ class SkillTui {
 
   private keyText(text: string): string {
     return `${ANSI.bold}${text}${ANSI.reset}`;
+  }
+
+  private footerStyle(): string {
+    if (this.installPlan || this.deletePlan) {
+      return ANSI.reverse + ANSI.bold + ANSI.yellow;
+    }
+    return ANSI.reverse + ANSI.bold;
   }
 
   private detailPaneLines(width: number, height: number): string[] {
@@ -647,7 +652,7 @@ class SkillTui {
       this.installPlan = null;
       this.message = `Cancelled install for ${plan.skill}.`;
     } else {
-      this.message = "Install is ready. Press y to run gh skill install, or n to cancel.";
+      this.message = "Confirm install: press y to run gh skill install, or n to cancel.";
     }
     return false;
   }
@@ -663,7 +668,7 @@ class SkillTui {
       this.deletePlan = null;
       this.message = `Cancelled delete for ${plan.skill}.`;
     } else {
-      this.message = "Delete is ready. Press y to delete skill directories, or n to cancel.";
+      this.message = "Confirm delete: press y to delete skill directories, or n to cancel.";
     }
     return false;
   }
@@ -723,23 +728,6 @@ class SkillTui {
     const current = this.pending.get(key) ?? status === "on";
     this.pending.set(key, !current);
     this.message = `Staged ${row.name} ${agent} -> ${!current ? "on" : "off"}.`;
-  }
-
-  private toggleRow(): void {
-    const row = this.currentRow();
-    if (!row) {
-      return;
-    }
-    const values = this.columns.flatMap((agent) => {
-      const status = row.status(agent);
-      if (status === "-") {
-        return [];
-      }
-      return [this.pending.get(this.key(row.name, agent)) ?? status === "on"];
-    });
-    if (values.length > 0) {
-      this.setRow(!values.every(Boolean));
-    }
   }
 
   private setRow(enabled: boolean): void {
@@ -808,7 +796,7 @@ class SkillTui {
     this.installPlan = { skill: row.name, actions };
     const agents = actions.map((action) => COLUMN_LABELS[action.agent]).join(", ");
     const method = actions[0]?.kind === "copy" ? "copy locally" : "run gh";
-    this.message = `Install ${row.name} for ${agents}? Press y to ${method}, n to cancel.`;
+    this.message = `Confirm install: ${row.name} for ${agents}? Press y to ${method}, n to cancel.`;
   }
 
   private prepareDelete(): void {
@@ -828,7 +816,7 @@ class SkillTui {
     }
 
     this.deletePlan = { skill: row.name, targets };
-    this.message = `Delete ${row.name} from ${targets.length} directories? Press y to delete, n to cancel.`;
+    this.message = `Confirm delete: ${row.name} from ${targets.length} directories? Press y to delete, n to cancel.`;
   }
 
   private executeInstallPlan(): void {

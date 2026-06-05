@@ -176,12 +176,11 @@ there are no active aligned agents, the status is shown as `N/A`.
 | `Up`/`Down`, `j`/`k`    | move row        | Move between skills                                               |
 | `Left`/`Right`, `h`/`l` | move column     | Move between agent columns                                        |
 | `Space`                 | toggle cell     | Toggle the selected skill for the selected agent                  |
-| `Enter`                 | toggle row      | Toggle the selected skill row across all agents where it exists   |
 | `o`                     | row on          | Enable the selected skill row across all agents where it exists   |
 | `x`                     | row off         | Disable the selected skill row across all agents where it exists  |
 | `d`                     | delete skill    | Delete the selected skill across all agents where it exists       |
 | `i`                     | install missing | Prepare `gh skill install` for missing agents on the selected row |
-| `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install                              |
+| `y`/`n`                 | confirm/cancel  | Confirm or cancel a prepared install/delete                       |
 | `s`                     | save            | Save pending changes                                              |
 | `r`                     | reload          | Reload from disk and clear pending changes                        |
 | `?`                     | help            | Open or close the help view                                       |

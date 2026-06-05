@@ -165,21 +165,20 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 
 キー操作:
 
-| Key                     | コマンド        | 動作                                             |
-| ----------------------- | --------------- | ------------------------------------------------ |
-| `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                   |
-| `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                   |
-| `Space`                 | toggle cell     | 選択中のセルだけ On/Off                          |
-| `Enter`                 | toggle row      | 選択中の skill 行を、存在する Agent 全体でトグル |
-| `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON    |
-| `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF   |
-| `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除     |
-| `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備       |
-| `y`/`n`                 | confirm/cancel  | 準備したインストールの実行/キャンセル            |
-| `s`                     | save            | 未保存変更を各 Agent の設定へ保存                |
-| `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄       |
-| `?`                     | help            | help view を開く/閉じる                          |
-| `q`                     | quit            | 終了                                             |
+| Key                     | コマンド        | 動作                                            |
+| ----------------------- | --------------- | ----------------------------------------------- |
+| `Up`/`Down`, `j`/`k`    | move row        | skill 行を移動                                  |
+| `Left`/`Right`, `h`/`l` | move column     | Agent 列を移動                                  |
+| `Space`                 | toggle cell     | 選択中のセルだけ On/Off                         |
+| `o`                     | row on          | 選択中の skill 行を、存在する Agent 全体で ON   |
+| `x`                     | row off         | 選択中の skill 行を、存在する Agent 全体で OFF  |
+| `d`                     | delete skill    | 選択中の skill を、存在する Agent 全体で削除    |
+| `i`                     | install missing | 選択中の skill を未導入 Agent へ入れる準備      |
+| `y`/`n`                 | confirm/cancel  | 準備したインストール/削除の実行またはキャンセル |
+| `s`                     | save            | 未保存変更を各 Agent の設定へ保存               |
+| `r`                     | reload          | ディスクから再読み込みし、未保存変更を破棄      |
+| `?`                     | help            | help view を開く/閉じる                         |
+| `q`                     | quit            | 終了                                            |
 
 Advanced keys:
 
