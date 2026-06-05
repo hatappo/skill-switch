@@ -18,12 +18,13 @@
 ## Supported agents
 
 Agent IDs follow the names in parentheses used by `gh skill install --help`.
-`universal` is skill-switch's column for `~/.agents/skills`; installs to it use the
-`universal` gh agent. It is shown at the left edge of the table.
+`agents` is skill-switch's column for `~/.agents/skills`. Installs to it use
+`gh skill install --dir ~/.agents/skills` so the skill lands in the shared path
+read by `.agents`-aligned agents. It is shown at the left edge of the table.
 
 | Agent              | ID               | User skill folders          | Toggle mechanism                                                                       |
 | ------------------ | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
-| Universal          | `universal`      | `~/.agents/skills`          | Applies settings for Universal-compatible agents except Claude Code and Cline          |
+| .agents            | `agents`         | `~/.agents/skills`          | Applies settings for `.agents`-aligned agents except Claude Code and Cline             |
 | Codex              | `codex`          | `~/.codex/skills`           | Writes `[[skills.config]]` entries in `~/.codex/config.toml` with `path` and `enabled` |
 | Claude Code        | `claude-code`    | `~/.claude/skills`          | Writes `skillOverrides` in `~/.claude/settings.json`                                   |
 | Cursor             | `cursor`         | `~/.cursor/skills`          | Writes `disable-model-invocation` in each skill's `SKILL.md` frontmatter               |
@@ -57,7 +58,7 @@ Enable/disable writes follow these rules:
 | OpenCode           | Set `permission.skill[name]=deny`                                                                          | Set `permission.skill[name]=allow` to override broader deny rules      |
 | Gemini CLI         | Add to `skills.disabled`                                                                                   | Remove from `skills.disabled` and keep `skills.enabled = true` if set  |
 | Cline              | Set `globalSkillsToggles[path]=false`                                                                      | Remove `globalSkillsToggles[path]`                                     |
-| Universal          | Applies OFF writes to Codex, Cursor, Copilot CLI, OpenCode, and Gemini CLI for the `~/.agents/skills` path | Applies ON writes to those same agents for the `~/.agents/skills` path |
+| .agents            | Applies OFF writes to Codex, Cursor, Copilot CLI, OpenCode, and Gemini CLI for the `~/.agents/skills` path | Applies ON writes to those same agents for the `~/.agents/skills` path |
 
 If an explicit ON entry already exists, an OFF action overwrites it with the
 agent's OFF form. For example, Codex `enabled = true` becomes `enabled = false`,
@@ -66,23 +67,23 @@ Claude Code `skillOverrides[name] = on` becomes `off`, Cursor
 `deny`.
 
 Agent-specific columns only control skills in that agent's primary user skill
-folder. They do not change a same-named Universal skill. The Universal column
+folder. They do not change a same-named `.agents` skill. The `.agents` column
 only controls the `~/.agents/skills` copy by writing settings for
-Universal-compatible agents. Claude Code is excluded because its official skill
+`.agents`-aligned agents. Claude Code is excluded because its official skill
 locations do not include `~/.agents/skills`. Cline is excluded for the same
 reason.
 
-Universal toggle targets:
+.agents toggle targets:
 
-| Agent              | Targeted by Universal | Setting touched for `~/.agents/skills` |
-| ------------------ | --------------------- | -------------------------------------- |
-| Codex              | Yes                   | `~/.codex/config.toml` path entry      |
-| Claude Code        | No                    | Not touched                            |
-| Cursor             | Yes                   | Universal skill `SKILL.md` frontmatter |
-| GitHub Copilot CLI | Yes                   | `~/.copilot/settings.json`             |
-| OpenCode           | Yes                   | `~/.config/opencode/opencode.json`     |
-| Gemini CLI         | Yes                   | `~/.gemini/settings.json`              |
-| Cline              | No                    | Not touched                            |
+| Agent              | Targeted by .agents | Setting touched for `~/.agents/skills` |
+| ------------------ | ------------------- | -------------------------------------- |
+| Codex              | Yes                 | `~/.codex/config.toml` path entry      |
+| Claude Code        | No                  | Not touched                            |
+| Cursor             | Yes                 | `.agents` skill `SKILL.md` frontmatter |
+| GitHub Copilot CLI | Yes                 | `~/.copilot/settings.json`             |
+| OpenCode           | Yes                 | `~/.config/opencode/opencode.json`     |
+| Gemini CLI         | Yes                 | `~/.gemini/settings.json`              |
+| Cline              | No                  | Not touched                            |
 
 ## Usage
 
@@ -112,7 +113,7 @@ node src/cli.ts export > skills.json
 node src/cli.ts import skills.json
 node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
-node src/cli.ts install-missing frontend-design universal cursor --execute
+node src/cli.ts install-missing frontend-design agents cursor --execute
 ```
 
 `export` writes a JSON snapshot of reproducible `on`/`off` states. `mixed` and
@@ -145,7 +146,7 @@ During local copy, `SKILL.md` frontmatter is sanitized to keep only Agent Skills
 spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, and
 `allowed-tools`.
 When multiple installed columns can be used as a source, the first match is used
-in this order: Universal, Codex, Claude Code, Cursor, GitHub Copilot CLI,
+in this order: .agents, Codex, Claude Code, Cursor, GitHub Copilot CLI,
 OpenCode, Gemini CLI, Cline.
 
 The TUI also supports this workflow: select a skill row, press `i`, then confirm
@@ -165,9 +166,10 @@ Status colors:
 | `-`            | Dim gray           |
 | Unsaved change | Bold cyan with `*` |
 
-For Universal mixed state, the status is shown as `enabled/total`, such as
-`2/3`. The denominator is the number of active Universal-aligned agents, and the
-numerator is the number of those agents where the Universal skill is enabled.
+For `.agents` mixed state, the status is shown as `enabled/total`, such as
+`2/3`. The denominator is the number of active `.agents`-aligned agents that
+interpret `~/.agents/skills`; the `.agents` column itself is not counted. If
+there are no active aligned agents, the status is shown as `N/A`.
 
 | Key                     | Command         | Action                                                            |
 | ----------------------- | --------------- | ----------------------------------------------------------------- |

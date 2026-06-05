@@ -54,7 +54,7 @@ function usage(): string {
     "  skill-switch [--home PATH] export",
     "  skill-switch [--home PATH] import <snapshot.json>",
     "  skill-switch [--home PATH] apply <snapshot.json>",
-    "  skill-switch [--home PATH] install-missing <skill> [agent|universal|all]... [--execute]",
+    "  skill-switch [--home PATH] install-missing <skill> [agent|agents|all]... [--execute]",
   ].join("\n");
 }
 

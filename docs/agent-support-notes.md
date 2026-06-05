@@ -29,6 +29,11 @@ Sources:
 ## gh Supported Agents
 
 This is the agent list shown by `gh skill install --help`.
+At user scope, `gh skill install --agent universal` currently installs into
+`~/.config/agents/skills`; skill-switch's `.agents` column is not that
+`universal` agent target. It uses `--dir ~/.agents/skills` because the agents
+investigated here document `~/.agents/skills` or agent-specific directories as
+their discovery paths.
 
 ```sh
 $ gh skill install --help | grep '  - '

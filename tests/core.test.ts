@@ -238,7 +238,7 @@ test("SkillManager matches skills by name across agents", () => {
 
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, "demo");
-  assert.equal(rows[0].status("universal"), "on");
+  assert.equal(rows[0].status("agents"), "on");
   assert.equal(rows[0].status("codex"), "on");
   assert.equal(rows[0].status("claude-code"), "on");
   assert.equal(rows[0].status("cursor"), "off");
@@ -263,18 +263,19 @@ test("SkillRow exposes the selected column description without fallback", () => 
   assert.equal(row?.path("cursor"), null);
 });
 
-test("activeColumns and formatTable hide columns without skill folders", () => {
+test("activeColumns and formatTable use existing skill folders", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
   writeSkill(join(home, ".codex", "skills", "demo", "SKILL.md"), "demo");
+  ensureDir(join(home, ".cursor", "skills"));
 
   const manager = new SkillManager(home);
   const table = manager.formatTable();
   const header = table.split("\n")[0];
 
-  assert.deepEqual(manager.activeColumns(), ["universal", "codex"]);
-  assert.match(header, /Universal\s+Codex\s*$/);
-  assert.doesNotMatch(header, /Claude Code|Cursor|Copilot CLI|OpenCode|Gemini CLI/);
+  assert.deepEqual(manager.activeColumns(), ["agents", "codex", "cursor"]);
+  assert.match(header, /\.agents\s+Codex\s+Cursor\s*$/);
+  assert.doesNotMatch(header, /Claude Code|Copilot CLI|OpenCode|Gemini CLI/);
 });
 
 test("applyState uses agent-specific storage", () => {
@@ -305,10 +306,10 @@ test("applyState uses agent-specific storage", () => {
 
 test("createSnapshot serializes on and off states only", () => {
   const home = tmpHome();
-  const universalSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const agentsSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
   const codexSkill = join(home, ".codex", "skills", "demo", "SKILL.md");
   const cursorSkill = join(home, ".cursor", "skills", "demo", "SKILL.md");
-  writeSkill(universalSkill, "demo");
+  writeSkill(agentsSkill, "demo");
   writeSkill(codexSkill, "demo");
   writeSkill(cursorSkill, "demo", "disable-model-invocation: true\n");
 
@@ -321,7 +322,7 @@ test("createSnapshot serializes on and off states only", () => {
       demo: {
         codex: "on",
         cursor: "off",
-        universal: "on",
+        agents: "on",
       },
     },
   });
@@ -377,68 +378,73 @@ test("parseSnapshot rejects unsupported agents and statuses", () => {
   );
 });
 
-test("Universal column applies settings to Universal-compatible agents only", () => {
+test(".agents column applies settings to .agents-aligned agents only", () => {
   const home = tmpHome();
-  const universalSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const agentsSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
   const codexConfig = join(home, ".codex", "config.toml");
   const claudeSettings = join(home, ".claude", "settings.json");
   const clineSettings = join(home, ".cline", "data", "settings", "global-settings.json");
   const copilotSettings = join(home, ".copilot", "settings.json");
   const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
   const geminiSettings = join(home, ".gemini", "settings.json");
-  writeSkill(universalSkill, "demo", "disable-model-invocation: false\n");
+  writeSkill(agentsSkill, "demo", "disable-model-invocation: false\n");
+  writeSkill(join(home, ".codex", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".cursor", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".copilot", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".config", "opencode", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".gemini", "skills", "other", "SKILL.md"), "other");
   ensureDir(dirname(claudeSettings));
   writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "on" } }), "utf8");
   ensureDir(dirname(clineSettings));
   writeFileSync(
     clineSettings,
-    JSON.stringify({ globalSkillsToggles: { [resolve(universalSkill)]: true } }),
+    JSON.stringify({ globalSkillsToggles: { [resolve(agentsSkill)]: true } }),
     "utf8",
   );
 
   const manager = new SkillManager(home);
-  assert.deepEqual(manager.applyState("demo", ["universal"], false), ["universal"]);
+  assert.deepEqual(manager.applyState("demo", ["agents"], false), ["agents"]);
 
-  assert.equal(readCodexSkillEnabled(codexConfig).get(resolve(universalSkill)), false);
-  assert.match(readFileSync(universalSkill, "utf8"), /disable-model-invocation: true/);
+  assert.equal(readCodexSkillEnabled(codexConfig).get(resolve(agentsSkill)), false);
+  assert.match(readFileSync(agentsSkill, "utf8"), /disable-model-invocation: true/);
   assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, ["demo"]);
   assert.equal(JSON.parse(readFileSync(opencodeConfig, "utf8")).permission.skill.demo, "deny");
   assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, ["demo"]);
   assert.equal(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides.demo, "on");
   assert.equal(
-    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(universalSkill)],
+    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(agentsSkill)],
     true,
   );
   assert.equal(
     manager
       .scan()
       .find((row) => row.name === "demo")
-      ?.status("universal"),
+      ?.status("agents"),
     "off",
   );
 
-  assert.deepEqual(manager.applyState("demo", ["universal"], true), ["universal"]);
+  assert.deepEqual(manager.applyState("demo", ["agents"], true), ["agents"]);
 
-  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(universalSkill)), false);
-  assert.doesNotMatch(readFileSync(universalSkill, "utf8"), /disable-model-invocation/);
+  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(agentsSkill)), false);
+  assert.doesNotMatch(readFileSync(agentsSkill, "utf8"), /disable-model-invocation/);
   assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, []);
   assert.equal(JSON.parse(readFileSync(opencodeConfig, "utf8")).permission.skill.demo, "allow");
   assert.deepEqual(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.disabled, []);
   assert.equal(JSON.parse(readFileSync(geminiSettings, "utf8")).skills.enabled, true);
   assert.equal(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides.demo, "on");
   assert.equal(
-    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(universalSkill)],
+    JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles[resolve(agentsSkill)],
     true,
   );
 });
 
-test("Universal column can report mixed state", () => {
+test(".agents column can report mixed state", () => {
   const home = tmpHome();
   writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
-  ensureDir(join(home, ".codex", "skills"));
-  ensureDir(join(home, ".cursor", "skills"));
-  ensureDir(join(home, ".copilot", "skills"));
-  ensureDir(join(home, ".cline", "skills"));
+  writeSkill(join(home, ".codex", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".cursor", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".copilot", "skills", "other", "SKILL.md"), "other");
+  writeSkill(join(home, ".cline", "skills", "other", "SKILL.md"), "other");
   const copilotSettings = join(home, ".copilot", "settings.json");
   ensureDir(dirname(copilotSettings));
   writeFileSync(copilotSettings, JSON.stringify({ disabledSkills: ["demo"] }), "utf8");
@@ -447,15 +453,54 @@ test("Universal column can report mixed state", () => {
     new SkillManager(home)
       .scan()
       .find((row) => row.name === "demo")
-      ?.status("universal"),
+      ?.status("agents"),
     "mixed",
   );
   assert.match(new SkillManager(home).formatTable(), /demo\s+2\/3/);
 });
 
+test(".agents column ignores inactive aligned agents in status counts", () => {
+  const home = tmpHome();
+  const agentsSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
+  writeSkill(agentsSkill, "demo");
+  writeSkill(join(home, ".codex", "skills", "other", "SKILL.md"), "other");
+  ensureDir(dirname(opencodeConfig));
+  writeFileSync(
+    opencodeConfig,
+    JSON.stringify({ permission: { skill: { demo: "deny" } } }),
+    "utf8",
+  );
+
+  const manager = new SkillManager(home);
+  assert.deepEqual(manager.activeAgentsColumnTargetAgents(), ["codex"]);
+  assert.equal(
+    manager
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.statusLabel("agents", manager.activeAgentsColumnTargetAgents()),
+    "ON",
+  );
+  assert.match(manager.formatTable(), /demo\s+ON\s+-/);
+});
+
+test(".agents column reports N/A when no aligned agents are active", () => {
+  const home = tmpHome();
+  writeSkill(join(home, ".agents", "skills", "demo", "SKILL.md"), "demo");
+
+  assert.equal(
+    new SkillManager(home)
+      .scan()
+      .find((row) => row.name === "demo")
+      ?.statusLabel("agents", []),
+    "N/A",
+  );
+  assert.match(new SkillManager(home).formatTable(), /demo\s+N\/A/);
+});
+
 test("deleteSkill removes skill directories and stale disable settings", () => {
   const home = tmpHome();
-  const universalSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  const agentsSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
   const claudeSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
   const clineSkill = join(home, ".cline", "skills", "demo", "SKILL.md");
   const geminiSkill = join(home, ".gemini", "skills", "demo", "SKILL.md");
@@ -465,11 +510,11 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
   const copilotSettings = join(home, ".copilot", "settings.json");
   const opencodeConfig = join(home, ".config", "opencode", "opencode.json");
   const geminiSettings = join(home, ".gemini", "settings.json");
-  writeSkill(universalSkill, "demo");
+  writeSkill(agentsSkill, "demo");
   writeSkill(claudeSkill, "demo");
   writeSkill(clineSkill, "demo");
   writeSkill(geminiSkill, "demo");
-  setCodexSkillEnabled(codexConfig, universalSkill, false);
+  setCodexSkillEnabled(codexConfig, agentsSkill, false);
   ensureDir(dirname(claudeSettings));
   writeFileSync(claudeSettings, JSON.stringify({ skillOverrides: { demo: "off" } }), "utf8");
   ensureDir(dirname(clineSettings));
@@ -491,7 +536,7 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
 
   const manager = new SkillManager(home);
   assert.deepEqual(manager.deleteTargets("demo"), [
-    resolve(dirname(universalSkill)),
+    resolve(dirname(agentsSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
     resolve(dirname(clineSkill)),
@@ -500,16 +545,16 @@ test("deleteSkill removes skill directories and stale disable settings", () => {
   const deleted = manager.deleteSkill("demo");
 
   assert.deepEqual(deleted, [
-    resolve(dirname(universalSkill)),
+    resolve(dirname(agentsSkill)),
     resolve(dirname(claudeSkill)),
     resolve(dirname(geminiSkill)),
     resolve(dirname(clineSkill)),
   ]);
-  assert.equal(existsSync(dirname(universalSkill)), false);
+  assert.equal(existsSync(dirname(agentsSkill)), false);
   assert.equal(existsSync(dirname(claudeSkill)), false);
   assert.equal(existsSync(dirname(clineSkill)), false);
   assert.equal(existsSync(dirname(geminiSkill)), false);
-  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(universalSkill)), false);
+  assert.equal(readCodexSkillEnabled(codexConfig).has(resolve(agentsSkill)), false);
   assert.deepEqual(JSON.parse(readFileSync(claudeSettings, "utf8")).skillOverrides, {});
   assert.deepEqual(JSON.parse(readFileSync(clineSettings, "utf8")).globalSkillsToggles, {});
   assert.deepEqual(JSON.parse(readFileSync(copilotSettings, "utf8")).disabledSkills, []);
@@ -645,7 +690,7 @@ test("buildInstallMissingCommands uses provenance from installed agents", () => 
   );
 
   const commands = new SkillManager(home).buildInstallMissingCommands("demo", [
-    "universal",
+    "agents",
     "codex",
     "cursor",
   ]);
@@ -658,10 +703,8 @@ test("buildInstallMissingCommands uses provenance from installed agents", () => 
         "install",
         "example/skills",
         "skills/demo",
-        "--scope",
-        "user",
-        "--agent",
-        "universal",
+        "--dir",
+        join(home, ".agents", "skills"),
       ],
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "codex"],
       ["skill", "install", "example/skills", "skills/demo", "--scope", "user", "--agent", "cursor"],
@@ -676,6 +719,66 @@ test("install-missing defaults to active columns only", () => {
   ensureDir(join(home, ".codex", "skills"));
 
   const actions = new SkillManager(home).buildInstallMissingActions("demo");
+
+  assert.deepEqual(actions, [
+    {
+      kind: "copy",
+      agent: "codex",
+      skillName: "demo",
+      sourcePath: resolve(dirname(sourceSkill)),
+      targetPath: join(home, ".codex", "skills", "demo"),
+      command: `copy ${resolve(dirname(sourceSkill))} -> ${join(home, ".codex", "skills", "demo")}`,
+    },
+  ]);
+});
+
+test("install-missing excludes columns whose skill folder does not exist", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  writeSkill(sourceSkill, "demo");
+
+  const actions = new SkillManager(home).buildInstallMissingActions("demo");
+
+  assert.deepEqual(actions, []);
+});
+
+test("install-missing with only .agents and Claude active targets .agents only", () => {
+  const home = tmpHome();
+  writeSkill(
+    join(home, ".claude", "skills", "demo", "SKILL.md"),
+    "demo",
+    [
+      "metadata:",
+      "    github-path: skills/demo",
+      "    github-repo: https://github.com/example/skills",
+      "",
+    ].join("\n"),
+  );
+  ensureDir(join(home, ".agents", "skills"));
+
+  const actions = new SkillManager(home).buildInstallMissingActions("demo");
+
+  assert.deepEqual(
+    actions.map((action) => action.agent),
+    ["agents"],
+  );
+  assert.deepEqual(actions[0]?.kind, "gh");
+  assert.deepEqual(actions[0]?.kind === "gh" ? actions[0].args : [], [
+    "skill",
+    "install",
+    "example/skills",
+    "skills/demo",
+    "--dir",
+    join(home, ".agents", "skills"),
+  ]);
+});
+
+test("install-missing can target inactive columns explicitly", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".agents", "skills", "demo", "SKILL.md");
+  writeSkill(sourceSkill, "demo");
+
+  const actions = new SkillManager(home).buildInstallMissingActions("demo", ["codex"]);
 
   assert.deepEqual(actions, [
     {
@@ -732,18 +835,18 @@ test("install-missing falls back to local copy without provenance", () => {
   );
 });
 
-test("install-missing can copy to Universal", () => {
+test("install-missing can copy to .agents", () => {
   const home = tmpHome();
   const sourceSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
   writeSkill(sourceSkill, "demo");
 
   const manager = new SkillManager(home);
-  const actions = manager.buildInstallMissingActions("demo", ["universal"]);
+  const actions = manager.buildInstallMissingActions("demo", ["agents"]);
 
   assert.deepEqual(actions, [
     {
       kind: "copy",
-      agent: "universal",
+      agent: "agents",
       skillName: "demo",
       sourcePath: resolve(dirname(sourceSkill)),
       targetPath: join(home, ".agents", "skills", "demo"),
@@ -758,7 +861,25 @@ test("install-missing can copy to Universal", () => {
     manager
       .scan()
       .find((row) => row.name === "demo")
-      ?.status("universal"),
+      ?.status("agents"),
     "on",
   );
+});
+
+test("install-missing to .agents does not activate inactive aligned agents", () => {
+  const home = tmpHome();
+  const sourceSkill = join(home, ".claude", "skills", "demo", "SKILL.md");
+  writeSkill(sourceSkill, "demo");
+
+  const manager = new SkillManager(home);
+  const [action] = manager.buildInstallMissingActions("demo", ["agents"]);
+  assert.ok(action);
+  manager.executeInstallAction(action);
+
+  assert.equal(existsSync(join(home, ".agents", "skills", "demo", "SKILL.md")), true);
+  assert.equal(existsSync(join(home, ".codex", "skills", "demo")), false);
+  assert.equal(existsSync(join(home, ".codex", "config.toml")), false);
+  assert.equal(existsSync(join(home, ".copilot", "settings.json")), false);
+  assert.equal(existsSync(join(home, ".config", "opencode", "opencode.json")), false);
+  assert.equal(existsSync(join(home, ".gemini", "settings.json")), false);
 });

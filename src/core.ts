@@ -21,11 +21,11 @@ export const AGENTS = [
   "gemini-cli",
   "cline",
 ] as const;
-export const UNIVERSAL = "universal";
-export const COLUMNS = [UNIVERSAL, ...AGENTS] as const;
+export const AGENTS_COLUMN = "agents";
+export const COLUMNS = [AGENTS_COLUMN, ...AGENTS] as const;
 export type AgentName = (typeof AGENTS)[number];
 export type ColumnName = (typeof COLUMNS)[number];
-export const UNIVERSAL_TARGET_AGENTS = AGENTS.filter(
+export const AGENTS_COLUMN_TARGET_AGENTS = AGENTS.filter(
   (agent) => agent !== "claude-code" && agent !== "cline",
 ) as Exclude<AgentName, "claude-code" | "cline">[];
 export type SkillStatus = "on" | "off" | "mixed" | "-";
@@ -40,7 +40,7 @@ export const AGENT_LABELS: Record<AgentName, string> = {
 };
 export const COLUMN_LABELS: Record<ColumnName, string> = {
   ...AGENT_LABELS,
-  universal: "Universal",
+  agents: ".agents",
 };
 export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
   codex: 6,
@@ -53,9 +53,9 @@ export const AGENT_COLUMN_WIDTHS: Record<AgentName, number> = {
 };
 export const COLUMN_WIDTHS: Record<ColumnName, number> = {
   ...AGENT_COLUMN_WIDTHS,
-  universal: 9,
+  agents: 7,
 };
-export const UNIVERSAL_SKILL_ROOT = [".agents", "skills"] as const;
+export const AGENTS_SKILL_ROOT = [".agents", "skills"] as const;
 export const AGENT_PRIMARY_SKILL_ROOTS: Record<AgentName, string[]> = {
   codex: [".codex", "skills"],
   "claude-code": [".claude", "skills"],
@@ -272,15 +272,21 @@ export class SkillRow {
 
   statusLabel(
     column: ColumnName,
-    universalTargetAgents: AgentName[] = [...UNIVERSAL_TARGET_AGENTS],
+    agentsColumnTargetAgents: AgentName[] = [...AGENTS_COLUMN_TARGET_AGENTS],
   ): string {
-    if (column === UNIVERSAL) {
-      const targetAgentSet = new Set(universalTargetAgents);
+    if (column === AGENTS_COLUMN) {
+      if (this.instances[column].length === 0) {
+        return "-";
+      }
+      if (agentsColumnTargetAgents.length === 0) {
+        return "N/A";
+      }
+      const targetAgentSet = new Set(agentsColumnTargetAgents);
       const items = this.instances[column].filter(
         (item) => item.targetAgent === null || targetAgentSet.has(item.targetAgent),
       );
       if (items.length === 0) {
-        return "-";
+        return "N/A";
       }
       const enabledCount = items.filter((item) => item.enabled).length;
       if (enabledCount === items.length) {
@@ -1278,25 +1284,25 @@ export class SkillManager {
     return COLUMNS.filter((column) => isDirectory(this.skillRoot(column)));
   }
 
-  activeUniversalTargetAgents(): AgentName[] {
+  activeAgentsColumnTargetAgents(): AgentName[] {
     const active = new Set(this.activeColumns());
-    return UNIVERSAL_TARGET_AGENTS.filter((agent) => active.has(agent));
+    return AGENTS_COLUMN_TARGET_AGENTS.filter((agent) => active.has(agent));
   }
 
   skillRoot(column: ColumnName): string {
-    const parts = column === UNIVERSAL ? UNIVERSAL_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[column];
+    const parts = column === AGENTS_COLUMN ? AGENTS_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[column];
     return join(this.home, ...parts);
   }
 
-  discoverUniversal(): SkillInstance[] {
-    return discoverSkillFiles(this.skillRoot(UNIVERSAL)).flatMap((path) => {
+  discoverAgentsColumn(): SkillInstance[] {
+    return discoverSkillFiles(this.skillRoot(AGENTS_COLUMN)).flatMap((path) => {
       const values = skillFrontmatter(path);
       const name = values.name || basename(dirname(path));
       const provenance = provenanceFromFrontmatter(values);
-      return UNIVERSAL_TARGET_AGENTS.map((agent) => {
+      return AGENTS_COLUMN_TARGET_AGENTS.map((agent) => {
         const instance = new SkillInstance(agent, name, path, true, provenance);
         return new SkillInstance(
-          UNIVERSAL,
+          AGENTS_COLUMN,
           name,
           path,
           this.adapters[agent].isEnabled(instance),
@@ -1311,9 +1317,9 @@ export class SkillManager {
 
   scan(): SkillRow[] {
     const rows = new Map<string, SkillRow>();
-    for (const instance of this.discoverUniversal()) {
+    for (const instance of this.discoverAgentsColumn()) {
       const row = rows.get(instance.name) ?? new SkillRow(instance.name);
-      row.instances.universal.push(instance);
+      row.instances.agents.push(instance);
       rows.set(instance.name, row);
     }
     for (const agent of AGENTS) {
@@ -1401,9 +1407,9 @@ export class SkillManager {
       if (instances.length === 0) {
         continue;
       }
-      if (agent === UNIVERSAL) {
+      if (agent === AGENTS_COLUMN) {
         const instance = instances[0];
-        this.setUniversalEnabled(instance, enabled);
+        this.setAgentsColumnEnabled(instance, enabled);
       } else {
         for (const instance of instances) {
           this.adapters[agent].setEnabled(instance, enabled);
@@ -1414,8 +1420,8 @@ export class SkillManager {
     return changed;
   }
 
-  private setUniversalEnabled(instance: SkillInstance, enabled: boolean): void {
-    for (const agent of UNIVERSAL_TARGET_AGENTS) {
+  private setAgentsColumnEnabled(instance: SkillInstance, enabled: boolean): void {
+    for (const agent of this.activeAgentsColumnTargetAgents()) {
       this.adapters[agent].setEnabled(
         new SkillInstance(agent, instance.name, instance.path, true, instance.provenance),
         enabled,
@@ -1439,8 +1445,8 @@ export class SkillManager {
         this.adapters[agent].remove?.(instance);
       }
     }
-    for (const instance of uniqueInstances(row.instances.universal)) {
-      for (const agent of UNIVERSAL_TARGET_AGENTS) {
+    for (const instance of uniqueInstances(row.instances.agents)) {
+      for (const agent of AGENTS_COLUMN_TARGET_AGENTS) {
         this.adapters[agent].remove?.(
           new SkillInstance(agent, instance.name, instance.path, true, instance.provenance),
         );
@@ -1479,16 +1485,26 @@ export class SkillManager {
     )?.provenance;
     if (source) {
       return missingAgents.map((agent) => {
-        const args = [
-          "skill",
-          "install",
-          source.repository,
-          source.skillPath,
-          "--scope",
-          "user",
-          "--agent",
-          agent,
-        ];
+        const args =
+          agent === AGENTS_COLUMN
+            ? [
+                "skill",
+                "install",
+                source.repository,
+                source.skillPath,
+                "--dir",
+                this.skillRoot(AGENTS_COLUMN),
+              ]
+            : [
+                "skill",
+                "install",
+                source.repository,
+                source.skillPath,
+                "--scope",
+                "user",
+                "--agent",
+                agent,
+              ];
         if (source.pin) {
           args.push("--pin", source.pin);
         }
@@ -1509,7 +1525,7 @@ export class SkillManager {
     const sourceDirectory = resolve(dirname(copySource.path));
     const directoryName = basename(sourceDirectory);
     return missingAgents.map((agent) => {
-      const root = agent === UNIVERSAL ? UNIVERSAL_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[agent];
+      const root = agent === AGENTS_COLUMN ? AGENTS_SKILL_ROOT : AGENT_PRIMARY_SKILL_ROOTS[agent];
       const targetPath = join(this.home, ...root, directoryName);
       return {
         kind: "copy",
@@ -1524,7 +1540,7 @@ export class SkillManager {
 
   executeInstallAction(action: InstallAction): void {
     if (action.kind === "gh") {
-      const result = spawnSync("gh", action.args, { stdio: "inherit" });
+      const result = spawnSync("gh", action.args, { stdio: ["ignore", "inherit", "inherit"] });
       if (result.error) {
         throw result.error;
       }
@@ -1547,13 +1563,13 @@ export class SkillManager {
     const copiedSkillPath = join(action.targetPath, "SKILL.md");
     sanitizeSkillFrontmatter(copiedSkillPath);
 
-    if (action.agent !== UNIVERSAL) {
+    if (action.agent !== AGENTS_COLUMN) {
       this.adapters[action.agent].remove?.(
         new SkillInstance(action.agent, action.skillName, copiedSkillPath, true, null),
       );
     } else {
-      this.setUniversalEnabled(
-        new SkillInstance(UNIVERSAL, action.skillName, copiedSkillPath, true, null),
+      this.setAgentsColumnEnabled(
+        new SkillInstance(AGENTS_COLUMN, action.skillName, copiedSkillPath, true, null),
         true,
       );
     }
@@ -1562,7 +1578,7 @@ export class SkillManager {
   formatTable(
     rows = this.scan(),
     columns = this.activeColumns(),
-    universalTargetAgents = this.activeUniversalTargetAgents(),
+    agentsColumnTargetAgents = this.activeAgentsColumnTargetAgents(),
   ): string {
     const nameWidth = Math.max("Skill".length, ...rows.map((row) => row.name.length));
     const lines = [
@@ -1575,7 +1591,7 @@ export class SkillManager {
       ),
     ];
     for (const row of rows) {
-      const values = columns.map((column) => row.statusLabel(column, universalTargetAgents));
+      const values = columns.map((column) => row.statusLabel(column, agentsColumnTargetAgents));
       lines.push(
         [
           row.name.padEnd(nameWidth),

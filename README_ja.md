@@ -18,12 +18,13 @@
 ## 対応 Agent
 
 Agent ID は `gh skill install --help` の括弧内の名称に合わせています。
-`universal` は skill-switch 内で `~/.agents/skills` を表す列です。この列への install は gh の
-`universal` agent を使います。表では左端に表示されます。
+`agents` は skill-switch 内で `~/.agents/skills` を表す列です。この列への install は
+`gh skill install --dir ~/.agents/skills` を使い、`.agents` aligned Agent が読む shared path に
+配置します。表では左端に表示されます。
 
 | Agent              | ID               | User skill folders          | 反映先                                                                            |
 | ------------------ | ---------------- | --------------------------- | --------------------------------------------------------------------------------- |
-| Universal          | `universal`      | `~/.agents/skills`          | Claude Code と Cline 以外の Universal 対応 Agent 向け設定をまとめて書き込み       |
+| .agents            | `agents`         | `~/.agents/skills`          | Claude Code と Cline 以外の `.agents` aligned Agent 向け設定をまとめて書き込み    |
 | Codex              | `codex`          | `~/.codex/skills`           | `~/.codex/config.toml` の `[[skills.config]]` に `path` と `enabled` を書き込み   |
 | Claude Code        | `claude-code`    | `~/.claude/skills`          | `~/.claude/settings.json` の `skillOverrides` を書き込み                          |
 | Cursor             | `cursor`         | `~/.cursor/skills`          | 各 skill の `SKILL.md` frontmatter に `disable-model-invocation` を書き込み       |
@@ -56,7 +57,7 @@ On/Off の書き込みは次のルールに従います。
 | OpenCode           | `permission.skill[name]=deny`                                                                                           | 上位の deny rule を上書きできるよう `permission.skill[name]=allow` を明示 |
 | Gemini CLI         | `skills.disabled` に追加                                                                                                | `skills.disabled` から削除し、必要なら `skills.enabled = true` は維持     |
 | Cline              | `globalSkillsToggles[path]=false` を設定                                                                                | `globalSkillsToggles[path]` を削除                                        |
-| Universal          | `~/.agents/skills` の path/name に対して Codex、Cursor、Copilot CLI、OpenCode、Gemini CLI の OFF 設定をまとめて書き込み | 同じ対象に ON 設定をまとめて書き込み                                      |
+| .agents            | `~/.agents/skills` の path/name に対して Codex、Cursor、Copilot CLI、OpenCode、Gemini CLI の OFF 設定をまとめて書き込み | 同じ対象に ON 設定をまとめて書き込み                                      |
 
 明示的な ON エントリが既にある状態で OFF にする場合は、各 Agent の OFF 形式へ上書きします。
 たとえば Codex の `enabled = true` は `enabled = false` に、Claude Code の
@@ -64,21 +65,21 @@ On/Off の書き込みは次のルールに従います。
 `true` に、OpenCode の `allow` は `deny` になります。
 
 Agent 個別の列は、その Agent の primary user skill folder にある skill だけを制御します。
-同名の Universal skill には作用しません。Universal 列は `~/.agents/skills` の skill だけを
-対象にし、Universal 対応 Agent 向けの設定をまとめて書き込みます。Claude Code は公式の skill
+同名の `.agents` skill には作用しません。`.agents` 列は `~/.agents/skills` の skill だけを
+対象にし、`.agents` aligned Agent 向けの設定をまとめて書き込みます。Claude Code は公式の skill
 location に `~/.agents/skills` を含まないため対象外です。Cline も同じ理由で対象外です。
 
-Universal toggle の対象:
+.agents toggle の対象:
 
-| Agent              | Universal の対象 | `~/.agents/skills` に対して触る設定       |
-| ------------------ | ---------------- | ----------------------------------------- |
-| Codex              | Yes              | `~/.codex/config.toml` の path entry      |
-| Claude Code        | No               | 触りません                                |
-| Cursor             | Yes              | Universal skill の `SKILL.md` frontmatter |
-| GitHub Copilot CLI | Yes              | `~/.copilot/settings.json`                |
-| OpenCode           | Yes              | `~/.config/opencode/opencode.json`        |
-| Gemini CLI         | Yes              | `~/.gemini/settings.json`                 |
-| Cline              | No               | 触りません                                |
+| Agent              | .agents の対象 | `~/.agents/skills` に対して触る設定       |
+| ------------------ | -------------- | ----------------------------------------- |
+| Codex              | Yes            | `~/.codex/config.toml` の path entry      |
+| Claude Code        | No             | 触りません                                |
+| Cursor             | Yes            | `.agents` skill の `SKILL.md` frontmatter |
+| GitHub Copilot CLI | Yes            | `~/.copilot/settings.json`                |
+| OpenCode           | Yes            | `~/.config/opencode/opencode.json`        |
+| Gemini CLI         | Yes            | `~/.gemini/settings.json`                 |
+| Cline              | No             | 触りません                                |
 
 ## 使い方
 
@@ -108,7 +109,7 @@ node src/cli.ts export > skills.json
 node src/cli.ts import skills.json
 node src/cli.ts apply skills.json
 node src/cli.ts install-missing frontend-design
-node src/cli.ts install-missing frontend-design universal cursor --execute
+node src/cli.ts install-missing frontend-design agents cursor --execute
 ```
 
 `export` は再現可能な `on`/`off` 状態を JSON snapshot として出力します。`mixed` と
@@ -138,7 +139,7 @@ GitHub provenance がない場合は、既存の local skill directory を missi
 user skill folder へコピーします。
 local copy 時は `SKILL.md` frontmatter を sanitize し、Agent Skills spec の field である
 `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` だけを残します。
-複数の列をインストール元として使える場合は、Universal、Codex、Claude Code、Cursor、
+複数の列をインストール元として使える場合は、.agents、Codex、Claude Code、Cursor、
 GitHub Copilot CLI、OpenCode、Gemini CLI、Cline の順で最初に見つかったものを使います。
 
 TUI でも同じ操作ができます。skill 行を選んで `i` を押し、`y` で確認すると、その skill が
@@ -158,8 +159,9 @@ GitHub provenance を使う経路では `gh skill install` が必要です。loc
 | `-`        | グレー               |
 | 未保存変更 | `*` 付きの太字シアン |
 
-Universal が mixed の場合は `2/3` のように `enabled/total` で表示します。分母は active かつ
-Universal aligned な Agent 数、分子はそのうち Universal skill が有効な Agent 数です。
+`.agents` が mixed の場合は `2/3` のように `enabled/total` で表示します。分母は active かつ
+`~/.agents/skills` を解釈する `.agents` aligned な Agent 数です。`.agents` 列自身は分母に
+含めません。対象 Agent が 0 件の場合は `N/A` と表示します。
 
 キー操作:
 

@@ -47,7 +47,7 @@ class SkillTui {
   private rows: SkillRow[] = [];
   private columns: ColumnName[] = [];
   private activeColumns: ColumnName[] = [];
-  private activeUniversalTargetAgents: AgentName[] = [];
+  private activeAgentsColumnTargetAgents: AgentName[] = [];
   private rowIndex = 0;
   private agentIndex = 0;
   private readonly pending = new Map<PendingKey, boolean>();
@@ -103,7 +103,7 @@ class SkillTui {
 
   private refreshColumns(): void {
     this.activeColumns = this.manager.activeColumns();
-    this.activeUniversalTargetAgents = this.manager.activeUniversalTargetAgents();
+    this.activeAgentsColumnTargetAgents = this.manager.activeAgentsColumnTargetAgents();
     this.columns = this.showAllColumns ? [...COLUMNS] : this.activeColumns;
   }
 
@@ -673,7 +673,7 @@ class SkillTui {
     if (staged !== undefined) {
       return staged ? "ON" : "OFF";
     }
-    return row.statusLabel(column, this.activeUniversalTargetAgents);
+    return row.statusLabel(column, this.activeAgentsColumnTargetAgents);
   }
 
   private renderStatusCell(

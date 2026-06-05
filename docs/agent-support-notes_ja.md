@@ -28,6 +28,10 @@ Sources:
 ## gh Supported Agents
 
 `gh skill install --help` に表示される Agent 一覧です。
+user scope の `gh skill install --agent universal` は現時点では `~/.config/agents/skills` に
+インストールします。skill-switch の `.agents` 列は、その `universal` agent target ではありません。
+調査対象 Agent が discovery path として `~/.agents/skills` または agent 固有 directory を
+記載しているため、`--dir ~/.agents/skills` を使います。
 
 ```sh
 $ gh skill install --help | grep '  - '
